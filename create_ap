@@ -1,0 +1,174 @@
+#!/bin/bash
+
+# dependencies:
+#    bash (to run this script)
+#    util-linux (for getopt)
+#    hostapd
+#    dnsmasq
+#    iptables
+#    iproute2
+#    haveged (optional)
+
+usage() {
+    echo "Usage: $(basename $0) [options] <wifi-interface> <interface-with-internet> <access-point-name> [<passphrase>]"
+    echo
+    echo "Options:"
+    echo "  -h, --help          Show this help"
+    echo "  -c <channel>        Channel number (default: 1)"
+    echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
+    echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
+    echo "  -d                  DNS server will take into account /etc/hosts (default: disabled)"
+    echo
+    echo "Example:"
+    echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
+}
+
+get_macaddr() {
+    ip link show "$1" | sed -n 's/.*ether \([0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]\) .*/\1/p'
+}
+
+ARGS=$(getopt -o hc:w:g:d -l "help" -n $(basename $0) -- "$@")
+[[ $? -ne 0 ]] && exit 1
+eval set -- "$ARGS"
+
+CHANNEL=1
+GATEWAY=192.168.12.1
+WPA_VERSION=1+2
+ETC_HOSTS=0
+
+while :; do
+    case "$1" in
+	-h|--help)
+	    usage
+	    exit 1
+	    ;;
+	-c)
+	    shift
+	    if [[ -n "$1" ]]; then
+		CHANNEL="$1"
+		shift
+	    fi
+	    ;;
+	-w)
+	    shift
+	    if [[ -n "$1" ]]; then
+		WPA_VERSION="$1"
+		shift
+	    fi
+	    ;;
+	-g)
+	    shift
+	    if [[ -n "$1" ]]; then
+		GATEWAY="$1"
+		shift
+	    fi
+	    ;;
+	-d)
+	    shift
+	    ETC_HOSTS=1
+	    ;;
+	--)
+	    shift
+	    break
+	    ;;
+    esac
+done
+
+if [[ $# -ne 3 && $# -ne 4 ]]; then
+    usage
+    exit 1
+fi
+
+WIFI_IFACE=$1
+INTERNET_IFACE=$2
+SSID=$3
+PASSPHRASE=$4
+
+if [[ $(id -u) -ne 0 ]]; then
+    echo "You must run it as root."
+    exit 1
+fi
+
+CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
+echo "Config dir: $CONFDIR"
+
+# hostapd config
+cat << EOF > $CONFDIR/hostapd.conf
+ssid=${SSID}
+interface=${WIFI_IFACE}
+driver=nl80211
+hw_mode=g
+channel=${CHANNEL}
+
+ctrl_interface=$CONFDIR/hostapd_ctrl
+ctrl_interface_group=0
+EOF
+
+if [[ -n "$PASSPHRASE" ]]; then
+    [[ "$WPA_VERSION" == "1+2" || "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=3
+    cat << EOF >> $CONFDIR/hostapd.conf
+wpa=${WPA_VERSION}
+wpa_passphrase=$4
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+EOF
+fi
+
+# dnsmasq config (dhcp + dns)
+cat << EOF > $CONFDIR/dnsmasq.conf
+interface=${WIFI_IFACE}
+bind-interfaces
+dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
+dhcp-option=option:router,${GATEWAY}
+EOF
+
+[[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
+
+# enable interface
+ip link set down dev ${WIFI_IFACE}
+ip addr flush ${WIFI_IFACE}
+ip link set up dev ${WIFI_IFACE}
+ip addr add ${GATEWAY}/24 dev ${WIFI_IFACE}
+
+# enable NAT
+iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+iptables -A FORWARD -i ${WIFI_IFACE} -j ACCEPT
+OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# boost low-entropy
+if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
+    which haveged > /dev/null 2>&1 && {
+	haveged -w 1024 -p $CONFDIR/haveged.pid
+    }
+fi
+
+# start dns + dhcp server
+dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid
+
+# start access point
+echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+hostapd $CONFDIR/hostapd.conf || {
+    echo
+    echo "Hostapd failed to run, maybe a program is interfering."
+    echo "If you use NetworkManager then add the following in"
+    echo "/etc/NetworkManager/NetworkManager.conf and retry."
+    echo "Don't forget to remove it after you finish."
+    echo
+    echo "[keyfile]"
+    echo "unmanaged-devices=mac:$(get_macaddr "$WIFI_IFACE")"
+    echo
+}
+
+# exiting
+for x in $CONFDIR/*.pid; do
+    kill -9 $(cat $x)
+done
+rm -rf $CONFDIR
+iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+iptables -D FORWARD -i ${WIFI_IFACE} -j ACCEPT
+echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+ip link set down dev ${WIFI_IFACE}
+ip addr flush ${WIFI_IFACE}
+exit 0
