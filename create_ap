@@ -18,6 +18,7 @@ usage() {
     echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                  DNS server will take into account /etc/hosts (default: disabled)"
+    echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
     echo
     echo "Example:"
     echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
@@ -27,7 +28,7 @@ get_macaddr() {
     ip link show "$1" | sed -n 's/.*ether \([0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]\) .*/\1/p'
 }
 
-ARGS=$(getopt -o hc:w:g:d -l "help" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:d -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -35,12 +36,18 @@ CHANNEL=1
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
+HIDDEN=0
 
 while :; do
     case "$1" in
 	-h|--help)
 	    usage
 	    exit 1
+	    ;;
+	--hidden)
+	    shift
+	    HIDDEN=1
+	    echo "ignore_broadcast_ssid="$HIDDEN
 	    ;;
 	-c)
 	    shift
@@ -102,6 +109,7 @@ channel=${CHANNEL}
 
 ctrl_interface=$CONFDIR/hostapd_ctrl
 ctrl_interface_group=0
+ignore_broadcast_ssid=$HIDDEN
 EOF
 
 if [[ -n "$PASSPHRASE" ]]; then
@@ -172,3 +180,4 @@ echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
 ip link set down dev ${WIFI_IFACE}
 ip addr flush ${WIFI_IFACE}
 exit 0
+
