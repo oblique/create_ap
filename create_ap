@@ -47,7 +47,6 @@ while :; do
 	--hidden)
 	    shift
 	    HIDDEN=1
-	    echo "ignore_broadcast_ssid="$HIDDEN
 	    ;;
 	-c)
 	    shift
@@ -98,6 +97,8 @@ fi
 
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
+
+[[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
 # hostapd config
 cat << EOF > $CONFDIR/hostapd.conf
