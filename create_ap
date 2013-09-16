@@ -10,25 +10,28 @@
 #    haveged (optional)
 
 usage() {
-    echo "Usage: $(basename $0) [options] <wifi-interface> <interface-with-internet> <access-point-name> [<passphrase>]"
+    echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] <access-point-name> [<passphrase>]"
     echo
     echo "Options:"
     echo "  -h, --help          Show this help"
     echo "  -c <channel>        Channel number (default: 1)"
     echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
-    echo "  -d                  DNS server will take into account /etc/hosts (default: disabled)"
+    echo "  -d                  DNS server will take into account /etc/hosts"
+    echo "  -n                  Disable Internet sharing (if you use this, don't pass"
+    echo "                      the <interface-with-internet> argument)"
     echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
     echo
-    echo "Example:"
+    echo "Examples:"
     echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  $(basename $0) -n wlan0 MyAccessPoint MyPassPhrase"
 }
 
 get_macaddr() {
     ip link show "$1" | sed -n 's/.*ether \([0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]\) .*/\1/p'
 }
 
-ARGS=$(getopt -o hc:w:g:d -l "help","hidden" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dn -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -37,6 +40,7 @@ GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
 HIDDEN=0
+SHARE_INTERNET=1
 
 while :; do
     case "$1" in
@@ -73,6 +77,10 @@ while :; do
 	    shift
 	    ETC_HOSTS=1
 	    ;;
+	-n)
+	    shift
+	    SHARE_INTERNET=0
+	    ;;
 	--)
 	    shift
 	    break
@@ -80,15 +88,23 @@ while :; do
     esac
 done
 
-if [[ $# -ne 3 && $# -ne 4 ]]; then
-    usage
-    exit 1
+if [[ $SHARE_INTERNET -eq 1 ]]; then
+    if [[ $# -ne 3 && $# -ne 4 ]]; then
+	usage
+	exit 1
+    fi
+    INTERNET_IFACE=$2
+    SSID=$3
+    PASSPHRASE=$4
+else
+    if [[ $# -ne 2 && $# -ne 3 ]]; then
+	usage
+	exit 1
+    fi
+    SSID=$2
+    PASSPHRASE=$3
 fi
-
 WIFI_IFACE=$1
-INTERNET_IFACE=$2
-SSID=$3
-PASSPHRASE=$4
 
 if [[ $(id -u) -ne 0 ]]; then
     echo "You must run it as root."
@@ -140,11 +156,13 @@ ip addr flush ${WIFI_IFACE}
 ip link set up dev ${WIFI_IFACE}
 ip addr add ${GATEWAY}/24 dev ${WIFI_IFACE}
 
-# enable NAT
-iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-iptables -A FORWARD -i ${WIFI_IFACE} -j ACCEPT
-OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
-echo 1 > /proc/sys/net/ipv4/ip_forward
+# enable NATed Internet sharing
+if [[ $SHARE_INTERNET -eq 1 ]]; then
+    iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+    iptables -A FORWARD -i ${WIFI_IFACE} -j ACCEPT
+    OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+fi
 
 # boost low-entropy
 if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
@@ -175,10 +193,11 @@ for x in $CONFDIR/*.pid; do
     kill -9 $(cat $x)
 done
 rm -rf $CONFDIR
-iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-iptables -D FORWARD -i ${WIFI_IFACE} -j ACCEPT
-echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+if [[ $SHARE_INTERNET -eq 1 ]]; then
+    iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+    iptables -D FORWARD -i ${WIFI_IFACE} -j ACCEPT
+    echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+fi
 ip link set down dev ${WIFI_IFACE}
 ip addr flush ${WIFI_IFACE}
 exit 0
-
