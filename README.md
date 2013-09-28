@@ -1,3 +1,13 @@
+## Dependencies
+
+* bash (to run this script)
+* util-linux (for getopt)
+* hostapd
+* dnsmasq
+* iptables
+* iproute2
+* haveged (optional)
+
 ## Examples
 
 ### No passphrase (open network):
