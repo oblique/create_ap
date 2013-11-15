@@ -25,6 +25,8 @@ usage() {
     echo "Examples:"
     echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  $(basename $0) -n wlan0 MyAccessPoint MyPassPhrase"
+    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) wlan0 eth0"
+    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) -n wlan0"
 }
 
 get_macaddr() {
@@ -44,67 +46,84 @@ SHARE_INTERNET=1
 
 while :; do
     case "$1" in
-	-h|--help)
-	    usage
-	    exit 1
-	    ;;
-	--hidden)
-	    shift
-	    HIDDEN=1
-	    ;;
-	-c)
-	    shift
-	    if [[ -n "$1" ]]; then
-		CHANNEL="$1"
-		shift
-	    fi
-	    ;;
-	-w)
-	    shift
-	    if [[ -n "$1" ]]; then
-		WPA_VERSION="$1"
-		shift
-	    fi
-	    ;;
-	-g)
-	    shift
-	    if [[ -n "$1" ]]; then
-		GATEWAY="$1"
-		shift
-	    fi
-	    ;;
-	-d)
-	    shift
-	    ETC_HOSTS=1
-	    ;;
-	-n)
-	    shift
-	    SHARE_INTERNET=0
-	    ;;
-	--)
-	    shift
-	    break
-	    ;;
+    -h|--help)
+        usage
+        exit 1
+        ;;
+    --hidden)
+        shift
+        HIDDEN=1
+        ;;
+    -c)
+        shift
+        if [[ -n "$1" ]]; then
+            CHANNEL="$1"
+            shift
+        fi
+        ;;
+    -w)
+        shift
+        if [[ -n "$1" ]]; then
+            WPA_VERSION="$1"
+            shift
+        fi
+        ;;
+    -g)
+        shift
+        if [[ -n "$1" ]]; then
+            GATEWAY="$1"
+            shift
+        fi
+        ;;
+    -d)
+        shift
+        ETC_HOSTS=1
+        ;;
+    -n)
+        shift
+        SHARE_INTERNET=0
+        ;;
+    --)
+        shift
+        break
+        ;;
     esac
 done
 
-if [[ $SHARE_INTERNET -eq 1 ]]; then
-    if [[ $# -ne 3 && $# -ne 4 ]]; then
-	usage
-	exit 1
-    fi
-    INTERNET_IFACE=$2
-    SSID=$3
-    PASSPHRASE=$4
-else
-    if [[ $# -ne 2 && $# -ne 3 ]]; then
-	usage
-	exit 1
-    fi
-    SSID=$2
-    PASSPHRASE=$3
+if [[ $# -lt 1 ]]; then
+    usage
+    exit 1
 fi
 WIFI_IFACE=$1
+
+if tty -s; then
+    if [[ $SHARE_INTERNET -eq 1 ]]; then
+        if [[ $# -ne 3 && $# -ne 4 ]]; then
+            usage
+            exit 1
+        fi
+        INTERNET_IFACE=$2
+        SSID=$3
+        PASSPHRASE=$4
+    else
+        if [[ $# -ne 2 && $# -ne 3 ]]; then
+            usage
+            exit 1
+        fi
+        SSID=$2
+        PASSPHRASE=$3
+    fi
+else
+    if [[ $SHARE_INTERNET -eq 1 ]]; then
+        if [[ $# -ne 2 ]]; then
+            usage
+            exit 1
+        fi
+        INTERNET_IFACE=$2
+    fi
+    read SSID
+    read PASSPHRASE
+fi
 
 if [[ $(id -u) -ne 0 ]]; then
     echo "You must run it as root."
@@ -133,7 +152,7 @@ if [[ -n "$PASSPHRASE" ]]; then
     [[ "$WPA_VERSION" == "1+2" || "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=3
     cat << EOF >> $CONFDIR/hostapd.conf
 wpa=${WPA_VERSION}
-wpa_passphrase=$4
+wpa_passphrase=$PASSPHRASE
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
@@ -167,7 +186,7 @@ fi
 # boost low-entropy
 if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
     which haveged > /dev/null 2>&1 && {
-	haveged -w 1024 -p $CONFDIR/haveged.pid
+        haveged -w 1024 -p $CONFDIR/haveged.pid
     }
 fi
 
