@@ -94,9 +94,10 @@ if [[ $# -lt 1 ]]; then
     usage
     exit 1
 fi
+
 WIFI_IFACE=$1
 
-if tty -s; then
+if [[ $# -gt 2 ]]; then
     if [[ $SHARE_INTERNET -eq 1 ]]; then
         if [[ $# -ne 3 && $# -ne 4 ]]; then
             usage
@@ -121,8 +122,14 @@ else
         fi
         INTERNET_IFACE=$2
     fi
-    read SSID
-    read PASSPHRASE
+    if tty -s; then
+        read -p "SSID: " SSID
+        read -p "Passphrase: " -s PASSPHRASE
+        echo
+    else
+        read SSID
+        read PASSPHRASE
+    fi
 fi
 
 if [[ $(id -u) -ne 0 ]]; then
