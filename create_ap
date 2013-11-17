@@ -124,8 +124,17 @@ else
     fi
     if tty -s; then
         read -p "SSID: " SSID
-        read -p "Passphrase: " -s PASSPHRASE
-        echo
+        while :; do
+            read -p "Passphrase: " -s PASSPHRASE
+            echo
+            read -p "Retype passphrase: " -s PASSPHRASE2
+            echo
+            if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
+                echo "Passphrases do not match."
+            else
+                break
+            fi
+        done
     else
         read SSID
         read PASSPHRASE
