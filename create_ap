@@ -10,7 +10,7 @@
 #    haveged (optional)
 
 usage() {
-    echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] <access-point-name> [<passphrase>]"
+    echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
     echo
     echo "Options:"
     echo "  -h, --help          Show this help"
