@@ -16,7 +16,7 @@
 
 OR
 
-    echo -e "MyAccessPoint\n" | ./create_ap wlan0 eth0
+    echo -e "MyAccessPoint" | ./create_ap wlan0 eth0
 
 ### WPA + WPA2 passphrase:
 
