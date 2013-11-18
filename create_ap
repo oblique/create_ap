@@ -4,10 +4,12 @@
 #    bash (to run this script)
 #    util-linux (for getopt)
 #    hostapd
-#    dnsmasq
-#    iptables
 #    iproute2
 #    haveged (optional)
+#    dnsmasq (needed for 'nat' or 'none' Internet sharing method)
+#    iptables (needed for 'nat' Internet sharing method)
+#    bridge-utils (needed for 'bridge' Internet sharing method)
+#    dhclient (needed for 'bridge' Internet sharing method)
 
 usage() {
     echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
@@ -16,24 +18,40 @@ usage() {
     echo "  -h, --help          Show this help"
     echo "  -c <channel>        Channel number (default: 1)"
     echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
-    echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
-    echo "  -d                  DNS server will take into account /etc/hosts"
     echo "  -n                  Disable Internet sharing (if you use this, don't pass"
     echo "                      the <interface-with-internet> argument)"
+    echo "  -m <method>         Method for Internet sharing."
+    echo "                      Use: 'nat' for NAT (default)"
+    echo "                           'bridge' for bridging"
+    echo "                           'none' for no Internet sharing (equivalent to -n)"
     echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
+    echo
+    echo "Non-Bridging Options:"
+    echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
+    echo "  -d                  DNS server will take into account /etc/hosts"
     echo
     echo "Examples:"
     echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  $(basename $0) -n wlan0 MyAccessPoint MyPassPhrase"
+    echo "  $(basename $0) -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) wlan0 eth0"
-    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) -n wlan0"
 }
 
 get_macaddr() {
-    ip link show "$1" | sed -n 's/.*ether \([0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]\) .*/\1/p'
+    ip link show "$1" | grep ether | grep -Eo '([0-9a-f]{2}:){5}[0-9a-f]{2}\s'
 }
 
-ARGS=$(getopt -o hc:w:g:dn -l "help","hidden" -n $(basename $0) -- "$@")
+get_avail_bridge() {
+    for i in {1..100}; do
+        curr_bridge=$(brctl show | grep "br$i" | cut -s -f1)
+        if [[ -z $curr_bridge ]]; then
+            echo "br$i"
+            return
+        fi
+    done
+}
+
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -42,7 +60,7 @@ GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
 HIDDEN=0
-SHARE_INTERNET=1
+SHARE_METHOD=nat
 
 while :; do
     case "$1" in
@@ -56,24 +74,18 @@ while :; do
             ;;
         -c)
             shift
-            if [[ -n "$1" ]]; then
-                CHANNEL="$1"
-                shift
-            fi
+            CHANNEL="$1"
+            shift
             ;;
         -w)
             shift
-            if [[ -n "$1" ]]; then
-                WPA_VERSION="$1"
-                shift
-            fi
+            WPA_VERSION="$1"
+            shift
             ;;
         -g)
             shift
-            if [[ -n "$1" ]]; then
-                GATEWAY="$1"
-                shift
-            fi
+            GATEWAY="$1"
+            shift
             ;;
         -d)
             shift
@@ -81,7 +93,12 @@ while :; do
             ;;
         -n)
             shift
-            SHARE_INTERNET=0
+            SHARE_METHOD=none
+            ;;
+        -m)
+            shift
+            SHARE_METHOD="$1"
+            shift
             ;;
         --)
             shift
@@ -95,10 +112,35 @@ if [[ $# -lt 1 ]]; then
     exit 1
 fi
 
-WIFI_IFACE=$1
+if [[ $(id -u) -ne 0 ]]; then
+    echo "You must run it as root."
+    exit 1
+fi
 
-if [[ $# -gt 2 ]]; then
-    if [[ $SHARE_INTERNET -eq 1 ]]; then
+if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
+    echo "ERROR: Wrong Internet sharing method"
+    echo
+    usage
+    exit 1
+fi
+
+WIFI_IFACE=$1
+if [[ "$SHARE_METHOD" == "bridge" ]]; then
+    BRIDGE_IFACE=$(get_avail_bridge)
+    if [[ -z $BRIDGE_IFACE ]]; then
+        echo "ERROR: No availabe bridges < br100"
+        exit 1
+    fi
+fi
+
+if [[ "$SHARE_METHOD" != "none" ]]; then
+    MIN_REQUIRED_ARGS=2
+else
+    MIN_REQUIRED_ARGS=1
+fi
+
+if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
+    if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 3 && $# -ne 4 ]]; then
             usage
             exit 1
@@ -115,7 +157,7 @@ if [[ $# -gt 2 ]]; then
         PASSPHRASE=$3
     fi
 else
-    if [[ $SHARE_INTERNET -eq 1 ]]; then
+    if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 2 ]]; then
             usage
             exit 1
@@ -139,11 +181,6 @@ else
         read SSID
         read PASSPHRASE
     fi
-fi
-
-if [[ $(id -u) -ne 0 ]]; then
-    echo "You must run it as root."
-    exit 1
 fi
 
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
@@ -175,28 +212,42 @@ rsn_pairwise=CCMP
 EOF
 fi
 
-# dnsmasq config (dhcp + dns)
-cat << EOF > $CONFDIR/dnsmasq.conf
+if [[ "$SHARE_METHOD" == "bridge" ]]; then
+    echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
+else
+    # dnsmasq config (dhcp + dns)
+    cat << EOF > $CONFDIR/dnsmasq.conf
 interface=${WIFI_IFACE}
 bind-interfaces
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
 EOF
+    [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
+fi
 
-[[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
-
-# enable interface
+# setup WiFi interface
 ip link set down dev ${WIFI_IFACE}
 ip addr flush ${WIFI_IFACE}
-ip link set up dev ${WIFI_IFACE}
-ip addr add ${GATEWAY}/24 dev ${WIFI_IFACE}
+if [[ "$SHARE_METHOD" != "bridge" ]]; then
+    ip link set up dev ${WIFI_IFACE}
+    ip addr add ${GATEWAY}/24 dev ${WIFI_IFACE}
+fi
 
-# enable NATed Internet sharing
-if [[ $SHARE_INTERNET -eq 1 ]]; then
-    iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-    iptables -A FORWARD -i ${WIFI_IFACE} -j ACCEPT
-    OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
-    echo 1 > /proc/sys/net/ipv4/ip_forward
+# enable Internet sharing
+if [[ "$SHARE_METHOD" != "none" ]]; then
+    echo "Sharing Internet using method: $SHARE_METHOD"
+    if [[ "$SHARE_METHOD" == "nat" ]]; then
+        iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+        iptables -A FORWARD -i ${WIFI_IFACE} -j ACCEPT
+        OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
+        echo 1 > /proc/sys/net/ipv4/ip_forward
+    elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+        brctl addbr ${BRIDGE_IFACE}
+        brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE}
+        dhclient -pf $CONFDIR/dhclient.pid ${BRIDGE_IFACE}
+    fi
+else
+    echo "No Internet sharing"
 fi
 
 # boost low-entropy
@@ -207,7 +258,9 @@ if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
 fi
 
 # start dns + dhcp server
-dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid
+if [[ "$SHARE_METHOD" != "bridge" ]]; then
+    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid
+fi
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
@@ -223,15 +276,25 @@ hostapd $CONFDIR/hostapd.conf || {
     echo
 }
 
+echo
+echo "Doing cleanup..."
+
 # exiting
 for x in $CONFDIR/*.pid; do
-    kill -9 $(cat $x)
+    # even if the $CONFDIR is empty, the for loop will assign
+    # a value in $x. so we need to check if the value is a file
+    [[ -f $x ]] && kill -9 $(cat $x)
 done
 rm -rf $CONFDIR
-if [[ $SHARE_INTERNET -eq 1 ]]; then
-    iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-    iptables -D FORWARD -i ${WIFI_IFACE} -j ACCEPT
-    echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+if [[ "$SHARE_METHOD" != "none" ]]; then
+    if [[ "$SHARE_METHOD" == "nat" ]]; then
+        iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+        iptables -D FORWARD -i ${WIFI_IFACE} -j ACCEPT
+        echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+    elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+        ip link set down $BRIDGE_IFACE
+        brctl delbr $BRIDGE_IFACE
+    fi
 fi
 ip link set down dev ${WIFI_IFACE}
 ip addr flush ${WIFI_IFACE}
