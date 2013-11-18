@@ -225,7 +225,7 @@ EOF
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
 fi
 
-# setup WiFi interface
+# initialize WiFi interface
 ip link set down dev ${WIFI_IFACE}
 ip addr flush ${WIFI_IFACE}
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
