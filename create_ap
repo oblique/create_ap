@@ -208,6 +208,12 @@ fi
 
 WIFI_IFACE=$1
 VWIFI_IFACE=${WIFI_IFACE}ap
+WIFI_IFACE_CHANNEL=$(iw ${WIFI_IFACE} info | grep channel | awk '{print $2}')
+
+if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
+    echo "hostapd will fail to use channel $CHANNEL because $WIFI_IFACE is already set to channel $WIFI_IFACE_CHANNEL, fallback to channel $WIFI_IFACE_CHANNEL."
+    CHANNEL=$WIFI_IFACE_CHANNEL
+fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     BRIDGE_IFACE=$(get_avail_bridge)
