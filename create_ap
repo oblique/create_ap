@@ -38,17 +38,40 @@ usage() {
 }
 
 get_macaddr() {
-    ip link show "$1" | grep ether | grep -Eo '([0-9a-f]{2}:){5}[0-9a-f]{2}\s'
+    ip link show "$1" | grep ether | grep -Eo '([0-9a-f]{2}:){5}[0-9a-f]{2}[[:space:]]' | tr -d '[[:space:]]'
 }
 
 get_avail_bridge() {
-    for i in {1..100}; do
+    for i in {0..100}; do
         curr_bridge=$(brctl show | grep "br$i" | cut -s -f1)
         if [[ -z $curr_bridge ]]; then
             echo "br$i"
             return
         fi
     done
+}
+
+ADDED_UNMANAGED=0
+NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
+
+networkmanager_add_unmanaged() {
+    [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
+    MAC=$(get_macaddr "$1")
+    grep -E "^unmanaged-devices=mac:${MAC}" ${NETWORKMANAGER_CONF} > /dev/null 2>&1 && return
+    echo -n "Network Manager config found, set $1 as unmanaged device... "
+    grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1 || echo -e '\n\n[keyfile]' >> ${NETWORKMANAGER_CONF}
+    sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
+    ADDED_UNMANAGED=1
+    sleep 2
+    echo "DONE"
+}
+
+networkmanager_rm_unmanaged() {
+    [[ $ADDED_UNMANAGED -eq 0 ]] && return
+    [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
+    MAC=$(get_macaddr "$1")
+    sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
+    sleep 2
 }
 
 ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
@@ -183,6 +206,8 @@ else
     fi
 fi
 
+networkmanager_add_unmanaged ${WIFI_IFACE}
+
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 
@@ -267,12 +292,6 @@ echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 hostapd $CONFDIR/hostapd.conf || {
     echo
     echo "Hostapd failed to run, maybe a program is interfering."
-    echo "If you use NetworkManager then add the following in"
-    echo "/etc/NetworkManager/NetworkManager.conf and retry."
-    echo "Don't forget to remove it after you finish."
-    echo
-    echo "[keyfile]"
-    echo "unmanaged-devices=mac:$(get_macaddr "$WIFI_IFACE")"
     echo
 }
 
@@ -298,4 +317,5 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
 fi
 ip link set down dev ${WIFI_IFACE}
 ip addr flush ${WIFI_IFACE}
+networkmanager_rm_unmanaged ${WIFI_IFACE}
 exit 0
