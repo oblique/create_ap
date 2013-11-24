@@ -1,15 +1,23 @@
 #!/bin/bash
 
-# dependencies:
+# general dependencies:
 #    bash (to run this script)
 #    util-linux (for getopt)
 #    hostapd
 #    iproute2
+#    iw
 #    haveged (optional)
-#    dnsmasq (needed for 'nat' or 'none' Internet sharing method)
-#    iptables (needed for 'nat' Internet sharing method)
-#    bridge-utils (needed for 'bridge' Internet sharing method)
-#    dhclient (needed for 'bridge' Internet sharing method)
+
+# dependencies for 'none' Internet sharing method
+#    dnsmasq
+
+# dependencies for 'nat' Internet sharing method
+#    dnsmasq
+#    iptables
+
+# dependencies for 'brigde' Internet sharing method
+#    bridge-utils
+#    dhclient
 
 usage() {
     echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
@@ -30,11 +38,21 @@ usage() {
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                  DNS server will take into account /etc/hosts"
     echo
+    echo "Useful informations:"
+    echo "  * You can create an Access Point from the same interface you are getting Internet."
+    echo
+    echo "  * If you want to pass the <access-point-name> and <passphrase> from stdin, you"
+    echo "    must not use them in the argument list. You must the put <access-point-name>"
+    echo "    at the first line and <passphrase> at the second line. See examples."
+    echo
     echo "Examples:"
     echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) wlan0 eth0"
+    echo "  $(basename $0) wlan0 eth0 MyAccessPoint"
+    echo "  echo 'MyAccessPoint' | $(basename $0) wlan0 eth0"
+    echo "  $(basename $0) wlan0 wlan0 MyAccessPoint MyPassPhrase"
     echo "  $(basename $0) -n wlan0 MyAccessPoint MyPassPhrase"
     echo "  $(basename $0) -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) wlan0 eth0"
 }
 
 get_macaddr() {
@@ -206,7 +224,17 @@ else
     fi
 fi
 
-networkmanager_add_unmanaged ${WIFI_IFACE}
+echo -n "Creating a virtual WiFi interface... "
+VWIFI_IFACE=${WIFI_IFACE}ap
+iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
+if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
+    echo "${VWIFI_IFACE} created."
+else
+    echo "FAILED!"
+    exit 1
+fi
+
+networkmanager_add_unmanaged ${VWIFI_IFACE}
 
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
@@ -216,7 +244,7 @@ echo "Config dir: $CONFDIR"
 # hostapd config
 cat << EOF > $CONFDIR/hostapd.conf
 ssid=${SSID}
-interface=${WIFI_IFACE}
+interface=${VWIFI_IFACE}
 driver=nl80211
 hw_mode=g
 channel=${CHANNEL}
@@ -242,7 +270,7 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
 else
     # dnsmasq config (dhcp + dns)
     cat << EOF > $CONFDIR/dnsmasq.conf
-interface=${WIFI_IFACE}
+interface=${VWIFI_IFACE}
 bind-interfaces
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
@@ -251,11 +279,11 @@ EOF
 fi
 
 # initialize WiFi interface
-ip link set down dev ${WIFI_IFACE}
-ip addr flush ${WIFI_IFACE}
+ip link set down dev ${VWIFI_IFACE}
+ip addr flush ${VWIFI_IFACE}
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
-    ip link set up dev ${WIFI_IFACE}
-    ip addr add ${GATEWAY}/24 dev ${WIFI_IFACE}
+    ip link set up dev ${VWIFI_IFACE}
+    ip addr add ${GATEWAY}/24 dev ${VWIFI_IFACE}
 fi
 
 # enable Internet sharing
@@ -263,7 +291,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
         iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-        iptables -A FORWARD -i ${WIFI_IFACE} -j ACCEPT
+        iptables -A FORWARD -i ${VWIFI_IFACE} -j ACCEPT
         OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
         echo 1 > /proc/sys/net/ipv4/ip_forward
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
@@ -308,14 +336,15 @@ rm -rf $CONFDIR
 if [[ "$SHARE_METHOD" != "none" ]]; then
     if [[ "$SHARE_METHOD" == "nat" ]]; then
         iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-        iptables -D FORWARD -i ${WIFI_IFACE} -j ACCEPT
+        iptables -D FORWARD -i ${VWIFI_IFACE} -j ACCEPT
         echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         ip link set down $BRIDGE_IFACE
         brctl delbr $BRIDGE_IFACE
     fi
 fi
-ip link set down dev ${WIFI_IFACE}
-ip addr flush ${WIFI_IFACE}
-networkmanager_rm_unmanaged ${WIFI_IFACE}
+ip link set down dev ${VWIFI_IFACE}
+ip addr flush ${VWIFI_IFACE}
+networkmanager_rm_unmanaged ${VWIFI_IFACE}
+iw dev ${VWIFI_IFACE} del
 exit 0
