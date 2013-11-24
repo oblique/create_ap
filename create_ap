@@ -92,16 +92,57 @@ networkmanager_rm_unmanaged() {
     sleep 2
 }
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
-[[ $? -ne 0 ]] && exit 1
-eval set -- "$ARGS"
-
 CHANNEL=1
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
 HIDDEN=0
 SHARE_METHOD=nat
+
+CONFDIR=
+VWIFI_IFACE=
+INTERNET_IFACE=
+BRIDGE_IFACE=
+OLD_IP_FORWARD=
+
+cleanup() {
+    echo
+    echo "Doing cleanup..."
+
+    # exiting
+    for x in $CONFDIR/*.pid; do
+        # even if the $CONFDIR is empty, the for loop will assign
+        # a value in $x. so we need to check if the value is a file
+        [[ -f $x ]] && kill -9 $(cat $x)
+    done
+    rm -rf $CONFDIR
+
+    if [[ "$SHARE_METHOD" != "none" ]]; then
+        if [[ "$SHARE_METHOD" == "nat" ]]; then
+            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+            iptables -D FORWARD -i ${VWIFI_IFACE} -j ACCEPT
+            echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+        elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+            ip link set down $BRIDGE_IFACE
+            brctl delbr $BRIDGE_IFACE
+        fi
+    fi
+
+    ip link set down dev ${VWIFI_IFACE}
+    ip addr flush ${VWIFI_IFACE}
+    networkmanager_rm_unmanaged ${VWIFI_IFACE}
+    iw dev ${VWIFI_IFACE} del
+}
+
+die() {
+    [[ -n "$1" ]] && echo -e "\nERROR: $1\n"
+    cleanup
+    exit 1
+}
+
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
+[[ $? -ne 0 ]] && exit 1
+eval set -- "$ARGS"
 
 while :; do
     case "$1" in
@@ -166,12 +207,16 @@ if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD"
 fi
 
 WIFI_IFACE=$1
+VWIFI_IFACE=${WIFI_IFACE}ap
+
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     BRIDGE_IFACE=$(get_avail_bridge)
     if [[ -z $BRIDGE_IFACE ]]; then
         echo "ERROR: No availabe bridges < br100"
         exit 1
     fi
+elif [[ "$SHARE_METHOD" == "nat" ]]; then
+    OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
 fi
 
 if [[ "$SHARE_METHOD" != "none" ]]; then
@@ -224,20 +269,18 @@ else
     fi
 fi
 
+CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
+echo "Config dir: $CONFDIR"
+
 echo -n "Creating a virtual WiFi interface... "
-VWIFI_IFACE=${WIFI_IFACE}ap
 iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
 if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
     echo "${VWIFI_IFACE} created."
 else
-    echo "FAILED!"
-    exit 1
+    die "Failed to create a virtual WiFi interface from ${WIFI_IFACE}."
 fi
 
 networkmanager_add_unmanaged ${VWIFI_IFACE}
-
-CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
-echo "Config dir: $CONFDIR"
 
 [[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
@@ -279,25 +322,24 @@ EOF
 fi
 
 # initialize WiFi interface
-ip link set down dev ${VWIFI_IFACE}
-ip addr flush ${VWIFI_IFACE}
+ip link set down dev ${VWIFI_IFACE} || die
+ip addr flush ${VWIFI_IFACE} || die
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
-    ip link set up dev ${VWIFI_IFACE}
-    ip addr add ${GATEWAY}/24 dev ${VWIFI_IFACE}
+    ip link set up dev ${VWIFI_IFACE} || die
+    ip addr add ${GATEWAY}/24 dev ${VWIFI_IFACE} || die
 fi
 
 # enable Internet sharing
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-        iptables -A FORWARD -i ${VWIFI_IFACE} -j ACCEPT
-        OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
-        echo 1 > /proc/sys/net/ipv4/ip_forward
+        iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE || die
+        iptables -A FORWARD -i ${VWIFI_IFACE} -j ACCEPT || die
+        echo 1 > /proc/sys/net/ipv4/ip_forward || die
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-        brctl addbr ${BRIDGE_IFACE}
-        brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE}
-        dhclient -pf $CONFDIR/dhclient.pid ${BRIDGE_IFACE}
+        brctl addbr ${BRIDGE_IFACE} || die
+        brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE} || die
+        dhclient -pf $CONFDIR/dhclient.pid ${BRIDGE_IFACE} || die
     fi
 else
     echo "No Internet sharing"
@@ -312,39 +354,12 @@ fi
 
 # start dns + dhcp server
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
-    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid
+    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid || die
 fi
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
-hostapd $CONFDIR/hostapd.conf || {
-    echo
-    echo "Hostapd failed to run, maybe a program is interfering."
-    echo
-}
+hostapd $CONFDIR/hostapd.conf || die "Failed to run hostapd, maybe a program is interfering."
 
-echo
-echo "Doing cleanup..."
-
-# exiting
-for x in $CONFDIR/*.pid; do
-    # even if the $CONFDIR is empty, the for loop will assign
-    # a value in $x. so we need to check if the value is a file
-    [[ -f $x ]] && kill -9 $(cat $x)
-done
-rm -rf $CONFDIR
-if [[ "$SHARE_METHOD" != "none" ]]; then
-    if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-        iptables -D FORWARD -i ${VWIFI_IFACE} -j ACCEPT
-        echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
-    elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-        ip link set down $BRIDGE_IFACE
-        brctl delbr $BRIDGE_IFACE
-    fi
-fi
-ip link set down dev ${VWIFI_IFACE}
-ip addr flush ${VWIFI_IFACE}
-networkmanager_rm_unmanaged ${VWIFI_IFACE}
-iw dev ${VWIFI_IFACE} del
+cleanup
 exit 0
