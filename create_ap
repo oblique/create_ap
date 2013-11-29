@@ -144,6 +144,9 @@ die() {
     exit 1
 }
 
+# if the user press ctrl+c then execute die()
+trap "die" SIGINT
+
 ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
@@ -373,6 +376,7 @@ fi
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+trap - SIGINT # reset trap
 hostapd $CONFDIR/hostapd.conf || die "Failed to run hostapd, maybe a program is interfering."
 
 cleanup
