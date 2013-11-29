@@ -120,7 +120,11 @@ cleanup() {
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
             iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-            iptables -D FORWARD -i ${VWIFI_IFACE} -j ACCEPT
+            iptables -D FORWARD -i ${VWIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
+            iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT
+            iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
             echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             ip link set down $BRIDGE_IFACE
@@ -339,8 +343,12 @@ fi
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -A POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE || die
-        iptables -A FORWARD -i ${VWIFI_IFACE} -j ACCEPT || die
+        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE || die
+        iptables -I FORWARD -i ${VWIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        iptables -I INPUT -p tcp -m tcp --dport 53 -j ACCEPT || die
+        iptables -I INPUT -p udp -m udp --dport 53 -j ACCEPT || die
+        iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         brctl addbr ${BRIDGE_IFACE} || die
