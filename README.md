@@ -33,3 +33,14 @@ OR
 OR
 
     echo -e "MyAccessPoint\nMyPassPhrase" | ./create_ap -n wlan0
+
+## Systemd service
+Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service
+### Install:
+    # cp create_ap.service /etc/systemd/system
+
+### Start service immediately:
+    # systemctl start create_ap
+
+### Start on boot:
+    # systemctl enable create_ap
