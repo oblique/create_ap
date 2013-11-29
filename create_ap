@@ -101,6 +101,7 @@ VWIFI_IFACE=
 INTERNET_IFACE=
 BRIDGE_IFACE=
 OLD_IP_FORWARD=
+OLD_BRIDGE_IPTABLES=
 
 cleanup() {
     echo
@@ -119,10 +120,11 @@ cleanup() {
             iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
             iptables -D FORWARD -i ${VWIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
-            echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+            [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             ip link set down $BRIDGE_IFACE
             brctl delbr $BRIDGE_IFACE
+            [[ -n $OLD_BRIDGE_IPTABLES ]] && echo $OLD_BRIDGE_IPTABLES > /proc/sys/net/bridge/bridge-nf-call-iptables
         fi
     fi
 
@@ -223,6 +225,7 @@ if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
 fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
+    OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
     BRIDGE_IFACE=$(get_avail_bridge)
     if [[ -z $BRIDGE_IFACE ]]; then
         echo "ERROR: No availabe bridges < br100"
@@ -351,6 +354,9 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+        # disable iptables rules for bridged interfaces
+        echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables || die
+        # create and initialize bridged interface
         brctl addbr ${BRIDGE_IFACE} || die
         brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE} || die
         dhclient -pf $CONFDIR/dhclient.pid ${BRIDGE_IFACE} || die
