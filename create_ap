@@ -361,7 +361,7 @@ ip link set down dev ${VWIFI_IFACE} || die
 ip addr flush ${VWIFI_IFACE} || die
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     ip link set up dev ${VWIFI_IFACE} || die
-    ip addr add ${GATEWAY}/24 dev ${VWIFI_IFACE} || die
+    ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${VWIFI_IFACE} || die
 fi
 
 # enable Internet sharing
