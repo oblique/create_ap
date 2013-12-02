@@ -66,12 +66,25 @@ get_avail_bridge() {
     done
 }
 
+get_new_macaddr() {
+    OLDMAC=$(get_macaddr "$1")
+    for i in {20..255}; do
+        NEWMAC="${OLDMAC%:*}:$(printf %02x $i)"
+        (ip link | grep "ether ${NEWMAC}" > /dev/null 2>&1) || break
+    done
+    echo $NEWMAC
+}
+
 ADDED_UNMANAGED=0
 NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 
 networkmanager_add_unmanaged() {
     [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
-    MAC=$(get_macaddr "$1")
+    if [[ -n "$2" ]]; then
+        MAC=$(get_macaddr "$1")
+    else
+        MAC="$2"
+    fi
     grep -E "^unmanaged-devices=mac:${MAC}" ${NETWORKMANAGER_CONF} > /dev/null 2>&1 && return
     echo -n "Network Manager config found, set $1 as unmanaged device... "
     grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1 || echo -e '\n\n[keyfile]' >> ${NETWORKMANAGER_CONF}
@@ -84,7 +97,11 @@ networkmanager_add_unmanaged() {
 networkmanager_rm_unmanaged() {
     [[ $ADDED_UNMANAGED -eq 0 ]] && return
     [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
-    MAC=$(get_macaddr "$1")
+    if [[ -n "$2" ]]; then
+        MAC=$(get_macaddr "$1")
+    else
+        MAC="$2"
+    fi
     sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
     sleep 2
 }
@@ -296,7 +313,8 @@ else
     die "Failed to create a virtual WiFi interface from ${WIFI_IFACE}."
 fi
 
-networkmanager_add_unmanaged ${VWIFI_IFACE}
+NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
+networkmanager_add_unmanaged ${VWIFI_IFACE} ${NEW_MACADDR}
 
 [[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
@@ -338,6 +356,7 @@ EOF
 fi
 
 # initialize WiFi interface
+ip link set dev ${VWIFI_IFACE} address ${NEW_MACADDR} || die
 ip link set down dev ${VWIFI_IFACE} || die
 ip addr flush ${VWIFI_IFACE} || die
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
