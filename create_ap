@@ -25,6 +25,7 @@ usage() {
     echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
     echo "  -n                  Disable Internet sharing (if you use this, don't pass"
     echo "                      the <interface-with-internet> argument)"
+    echo "  -f                  force set down dev <wifi-interface>"
     echo "  -m <method>         Method for Internet sharing."
     echo "                      Use: 'nat' for NAT (default)"
     echo "                           'bridge' for bridging"
@@ -94,6 +95,7 @@ GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
 HIDDEN=0
+FORCE_DOWN=0
 SHARE_METHOD=nat
 
 CONFDIR=
@@ -149,7 +151,7 @@ die() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dfnm: -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -181,6 +183,10 @@ while :; do
         -d)
             shift
             ETC_HOSTS=1
+            ;;
+        -f)
+            shift
+            FORCE_DOWN=1
             ;;
         -n)
             shift
@@ -338,6 +344,9 @@ EOF
 fi
 
 # initialize WiFi interface
+if [[ $FORCE_DOWN -eq 1 ]]; then
+    ip link set down dev ${WIFI_IFACE} || die
+fi
 ip link set down dev ${VWIFI_IFACE} || die
 ip addr flush ${VWIFI_IFACE} || die
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
