@@ -338,6 +338,9 @@ EOF
 fi
 
 # initialize WiFi interface
+if [[ "$WIFI_IFACE" != "$INTERNET_IFACE" ]]; then
+    ip link set down dev ${WIFI_IFACE} || die
+fi
 ip link set down dev ${VWIFI_IFACE} || die
 ip addr flush ${VWIFI_IFACE} || die
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
