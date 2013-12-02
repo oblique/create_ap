@@ -151,7 +151,7 @@ die() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dfnm: -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -344,7 +344,7 @@ EOF
 fi
 
 # initialize WiFi interface
-if [[ $HIDDEN -eq 1 ]]; then
+if [[ $FORCE_DOWN -eq 1 ]]; then
     ip link set down dev ${WIFI_IFACE} || die
 fi
 ip link set down dev ${VWIFI_IFACE} || die
