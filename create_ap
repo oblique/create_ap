@@ -12,7 +12,7 @@
 #    dnsmasq
 #    iptables
 
-# dependencies for 'brigde' Internet sharing method
+# dependencies for 'bridge' Internet sharing method
 #    bridge-utils
 #    dhclient
 
