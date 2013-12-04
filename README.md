@@ -17,11 +17,11 @@
 * iw
 * haveged (optional)
 
-### For 'nat' or 'none' Internet sharing method
+### For 'NATed' or 'None' Internet sharing method
 * dnsmasq
 * iptables
 
-### For 'brigde' Internet sharing method
+### For 'Bridged' Internet sharing method
 * bridge-utils
 * dhclient
 
