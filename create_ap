@@ -77,15 +77,21 @@ NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 
 networkmanager_add_unmanaged() {
     [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
-    if [[ -n "$2" ]]; then
+    if [[ -z "$2" ]]; then
         MAC=$(get_macaddr "$1")
     else
         MAC="$2"
     fi
-    grep -E "^unmanaged-devices=mac:${MAC}" ${NETWORKMANAGER_CONF} > /dev/null 2>&1 && return
+    UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
+    [[ $UNMANAGED == *mac:${MAC}* ]] && return
     echo -n "Network Manager config found, set $1 as unmanaged device... "
     grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1 || echo -e '\n\n[keyfile]' >> ${NETWORKMANAGER_CONF}
-    sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
+    if [[ -z ${UNMANAGED} ]]; then
+        sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
+    else
+        NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;-]*\)/\1;mac:${MAC}/")
+        sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    fi
     ADDED_UNMANAGED=1
     sleep 2
     echo "DONE"
@@ -94,12 +100,18 @@ networkmanager_add_unmanaged() {
 networkmanager_rm_unmanaged() {
     [[ $ADDED_UNMANAGED -eq 0 ]] && return
     [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
-    if [[ -n "$2" ]]; then
+    if [[ -z "$2" ]]; then
         MAC=$(get_macaddr "$1")
     else
         MAC="$2"
     fi
-    sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
+    UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
+    if [[ $UNMANAGED != *\;* ]]; then
+        sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
+    else
+        NEW_UNMANAGED=$(echo ${UNMANAGED} | sed -e "s/;mac:${MAC}//")
+        sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    fi
     sleep 2
 }
 
@@ -116,6 +128,7 @@ INTERNET_IFACE=
 BRIDGE_IFACE=
 OLD_IP_FORWARD=
 OLD_BRIDGE_IPTABLES=
+OLD_MACADDR=
 
 cleanup() {
     echo
@@ -150,7 +163,7 @@ cleanup() {
 
     ip link set down dev ${VWIFI_IFACE}
     ip addr flush ${VWIFI_IFACE}
-    networkmanager_rm_unmanaged ${VWIFI_IFACE}
+    networkmanager_rm_unmanaged ${VWIFI_IFACE} ${OLD_MACADDR}
     iw dev ${VWIFI_IFACE} del
 }
 
@@ -310,8 +323,9 @@ else
     die "Failed to create a virtual WiFi interface from ${WIFI_IFACE}."
 fi
 
+OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
 NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
-networkmanager_add_unmanaged ${VWIFI_IFACE} ${NEW_MACADDR}
+networkmanager_add_unmanaged ${VWIFI_IFACE}
 
 [[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
