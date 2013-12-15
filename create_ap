@@ -121,6 +121,7 @@ WPA_VERSION=1+2
 ETC_HOSTS=0
 HIDDEN=0
 SHARE_METHOD=nat
+DRIVER=nl80211
 
 CONFDIR=
 VWIFI_IFACE=
@@ -216,6 +217,11 @@ while :; do
         -m)
             shift
             SHARE_METHOD="$1"
+            shift
+            ;;
+        --driver)
+            shift
+            DRIVER="$1"
             shift
             ;;
         --)
@@ -333,7 +339,7 @@ networkmanager_add_unmanaged ${VWIFI_IFACE}
 cat << EOF > $CONFDIR/hostapd.conf
 ssid=${SSID}
 interface=${VWIFI_IFACE}
-driver=nl80211
+driver=${DRIVER}
 hw_mode=g
 channel=${CHANNEL}
 
