@@ -49,6 +49,9 @@
 ### Internet sharing from the same WiFi interface:
     create_ap wlan0 wlan0 MyAccessPoint MyPassPhrase
 
+### Choose a different WiFi adapter driver
+    create_ap --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase
+
 ### No passphrase (open network) using pipe:
     echo -e "MyAccessPoint" | create_ap wlan0 eth0
 
