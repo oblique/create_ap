@@ -177,7 +177,7 @@ die() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hcz:w:g:dnm: -l "help","hidden" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -219,7 +219,7 @@ while :; do
             SHARE_METHOD="$1"
             shift
             ;;
-        --driver)
+        -z)
             shift
             DRIVER="$1"
             shift
