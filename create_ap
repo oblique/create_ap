@@ -31,13 +31,15 @@ usage() {
     echo "                           'none' for no Internet sharing (equivalent to -n)"
     echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
     echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
+    echo "  --no-virt           Do not create virtual interface"
     echo
     echo "Non-Bridging Options:"
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                  DNS server will take into account /etc/hosts"
     echo
     echo "Useful informations:"
-    echo "  * You can create an AP with the same interface you are getting your Internet connection."
+    echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
+    echo "    interface you are getting your Internet connection."
     echo "  * You can pass your SSID and password through pipe or through arguments (see examples)."
     echo
     echo "Examples:"
@@ -125,8 +127,10 @@ ETC_HOSTS=0
 HIDDEN=0
 SHARE_METHOD=nat
 DRIVER=nl80211
+NO_VIRT=0
 
 CONFDIR=
+WIFI_IFACE=
 VWIFI_IFACE=
 INTERNET_IFACE=
 BRIDGE_IFACE=
@@ -149,7 +153,7 @@ cleanup() {
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
             iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
-            iptables -D FORWARD -i ${VWIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
             [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
@@ -165,10 +169,18 @@ cleanup() {
         iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
     fi
 
-    ip link set down dev ${VWIFI_IFACE}
-    ip addr flush ${VWIFI_IFACE}
-    networkmanager_rm_unmanaged ${VWIFI_IFACE} ${OLD_MACADDR}
-    iw dev ${VWIFI_IFACE} del
+    if [[ $NO_VIRT -eq 0 ]]; then
+        if [[ -n $VWIFI_IFACE ]]; then
+            ip link set down dev ${VWIFI_IFACE}
+            ip addr flush ${VWIFI_IFACE}
+            networkmanager_rm_unmanaged ${VWIFI_IFACE} ${OLD_MACADDR}
+            iw dev ${VWIFI_IFACE} del
+        fi
+    else
+        ip link set down dev ${WIFI_IFACE}
+        ip addr flush ${WIFI_IFACE}
+        networkmanager_rm_unmanaged ${WIFI_IFACE}
+    fi
 }
 
 die() {
@@ -180,7 +192,7 @@ die() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","driver:" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","driver:","no-virt" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -227,6 +239,10 @@ while :; do
             DRIVER="$1"
             shift
             ;;
+        --no-virt)
+            shift
+            NO_VIRT=1
+            ;;
         --)
             shift
             break
@@ -252,13 +268,6 @@ if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD"
 fi
 
 WIFI_IFACE=$1
-VWIFI_IFACE=${WIFI_IFACE}ap
-WIFI_IFACE_CHANNEL=$(iw ${WIFI_IFACE} info | grep channel | awk '{print $2}')
-
-if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
-    echo "hostapd will fail to use channel $CHANNEL because $WIFI_IFACE is already set to channel $WIFI_IFACE_CHANNEL, fallback to channel $WIFI_IFACE_CHANNEL."
-    CHANNEL=$WIFI_IFACE_CHANNEL
-fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
@@ -324,24 +333,36 @@ fi
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 
-echo -n "Creating a virtual WiFi interface... "
-iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
-if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
-    echo "${VWIFI_IFACE} created."
-else
-    die "Failed to create a virtual WiFi interface from ${WIFI_IFACE}."
+if [[ $NO_VIRT -eq 0 ]]; then
+    VWIFI_IFACE=${WIFI_IFACE}ap
+    WIFI_IFACE_CHANNEL=$(iw ${WIFI_IFACE} info | grep channel | awk '{print $2}')
+
+    if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
+        echo "hostapd will fail to use channel $CHANNEL because $WIFI_IFACE is already set to channel $WIFI_IFACE_CHANNEL, fallback to channel $WIFI_IFACE_CHANNEL."
+        CHANNEL=$WIFI_IFACE_CHANNEL
+    fi
+
+    echo -n "Creating a virtual WiFi interface... "
+    iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
+    if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
+        echo "${VWIFI_IFACE} created."
+    else
+        VWIFI_IFACE=
+        die "Failed to create a virtual WiFi interface from ${WIFI_IFACE}."
+    fi
+    OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
+    NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
+    WIFI_IFACE=${VWIFI_IFACE}
 fi
 
-OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
-NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
-networkmanager_add_unmanaged ${VWIFI_IFACE}
+networkmanager_add_unmanaged ${WIFI_IFACE}
 
 [[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
 # hostapd config
 cat << EOF > $CONFDIR/hostapd.conf
 ssid=${SSID}
-interface=${VWIFI_IFACE}
+interface=${WIFI_IFACE}
 driver=${DRIVER}
 hw_mode=g
 channel=${CHANNEL}
@@ -367,7 +388,7 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
 else
     # dnsmasq config (dhcp + dns)
     cat << EOF > $CONFDIR/dnsmasq.conf
-interface=${VWIFI_IFACE}
+interface=${WIFI_IFACE}
 bind-interfaces
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
@@ -376,12 +397,14 @@ EOF
 fi
 
 # initialize WiFi interface
-ip link set dev ${VWIFI_IFACE} address ${NEW_MACADDR} || die
-ip link set down dev ${VWIFI_IFACE} || die
-ip addr flush ${VWIFI_IFACE} || die
+if [[ $NO_VIRT -eq 0 ]]; then
+    ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die
+fi
+ip link set down dev ${WIFI_IFACE} || die
+ip addr flush ${WIFI_IFACE} || die
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
-    ip link set up dev ${VWIFI_IFACE} || die
-    ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${VWIFI_IFACE} || die
+    ip link set up dev ${WIFI_IFACE} || die
+    ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die
 fi
 
 # enable Internet sharing
@@ -389,7 +412,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
         iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE || die
-        iptables -I FORWARD -i ${VWIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
         iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
