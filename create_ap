@@ -342,17 +342,21 @@ if [[ $NO_VIRT -eq 0 ]]; then
         CHANNEL=$WIFI_IFACE_CHANNEL
     fi
 
+    VIRTDIEMSG="Maybe your WiFi adapter does not fully support virtual interfaces.
+       Try again with --no-virt."
     echo -n "Creating a virtual WiFi interface... "
     iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
         echo "${VWIFI_IFACE} created."
     else
         VWIFI_IFACE=
-        die "Failed to create a virtual WiFi interface from ${WIFI_IFACE}."
+        die "$VIRTDIEMSG"
     fi
     OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
     NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
     WIFI_IFACE=${VWIFI_IFACE}
+else
+    [[ "$WIFI_IFACE" == "$INTERNET_IFACE" ]] && die "You can not share your connection from the same interface if you are using --no-virt option."
 fi
 
 networkmanager_add_unmanaged ${WIFI_IFACE}
@@ -398,13 +402,13 @@ fi
 
 # initialize WiFi interface
 if [[ $NO_VIRT -eq 0 ]]; then
-    ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die
+    ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die "$VIRTDIEMSG"
 fi
-ip link set down dev ${WIFI_IFACE} || die
-ip addr flush ${WIFI_IFACE} || die
+ip link set down dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+ip addr flush ${WIFI_IFACE} || die "$VIRTDIEMSG"
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
-    ip link set up dev ${WIFI_IFACE} || die
-    ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die
+    ip link set up dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+    ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
 fi
 
 # enable Internet sharing
