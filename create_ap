@@ -184,7 +184,7 @@ cleanup() {
 }
 
 die() {
-    [[ -n "$1" ]] && echo -e "\nERROR: $1\n"
+    [[ -n "$1" ]] && echo -e "\nERROR: $1\n" >&2
     cleanup
     exit 1
 }
@@ -199,7 +199,7 @@ eval set -- "$ARGS"
 while :; do
     case "$1" in
         -h|--help)
-            usage
+            usage >&2
             exit 1
             ;;
         --hidden)
@@ -251,19 +251,19 @@ while :; do
 done
 
 if [[ $# -lt 1 ]]; then
-    usage
+    usage >&2
     exit 1
 fi
 
 if [[ $(id -u) -ne 0 ]]; then
-    echo "You must run it as root."
+    echo "You must run it as root." >&2
     exit 1
 fi
 
 if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
-    echo "ERROR: Wrong Internet sharing method"
+    echo "ERROR: Wrong Internet sharing method" >&2
     echo
-    usage
+    usage >&2
     exit 1
 fi
 
@@ -273,7 +273,7 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
     OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
     BRIDGE_IFACE=$(get_avail_bridge)
     if [[ -z $BRIDGE_IFACE ]]; then
-        echo "ERROR: No availabe bridges < br100"
+        echo "ERROR: No availabe bridges < br100" >&2
         exit 1
     fi
 elif [[ "$SHARE_METHOD" == "nat" ]]; then
@@ -289,7 +289,7 @@ fi
 if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 3 && $# -ne 4 ]]; then
-            usage
+            usage >&2
             exit 1
         fi
         INTERNET_IFACE=$2
@@ -297,7 +297,7 @@ if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
         PASSPHRASE=$4
     else
         if [[ $# -ne 2 && $# -ne 3 ]]; then
-            usage
+            usage >&2
             exit 1
         fi
         SSID=$2
@@ -306,7 +306,7 @@ if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
 else
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 2 ]]; then
-            usage
+            usage >&2
             exit 1
         fi
         INTERNET_IFACE=$2
