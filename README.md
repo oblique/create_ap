@@ -24,7 +24,6 @@
 
 ### For 'Bridged' Internet sharing method
 * bridge-utils
-* dhclient
 
 
 ## Installation
