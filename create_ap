@@ -14,7 +14,6 @@
 
 # dependencies for 'bridge' Internet sharing method
 #    bridge-utils
-#    dhclient
 
 usage() {
     echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
@@ -446,7 +445,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # create and initialize bridged interface
         brctl addbr ${BRIDGE_IFACE} || die
         brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE} || die
-        dhclient -pf $CONFDIR/dhclient.pid ${BRIDGE_IFACE} || die
+        ip link set dev ${BRIDGE_IFACE} up || die
     fi
 else
     echo "No Internet sharing"
