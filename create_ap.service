@@ -4,6 +4,7 @@ Description=Create AP Service
 [Service]
 Type=simple
 ExecStart=/usr/bin/bash create_ap -n -g 10.0.0.1 wlan0 AccessPointSSID
+ExecStop=pkill hostapd
 KillSignal=SIGINT
 Restart=on-failure
 RestartSec=5
