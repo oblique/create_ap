@@ -402,7 +402,7 @@ if [[ -n "$PASSPHRASE" ]]; then
 wpa=${WPA_VERSION}
 wpa_passphrase=$PASSPHRASE
 wpa_key_mgmt=WPA-PSK
-wpa_pairwise=TKIP
+wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP
 EOF
 fi
