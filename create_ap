@@ -80,8 +80,18 @@ get_new_macaddr() {
 ADDED_UNMANAGED=0
 NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 
+networkmanager_is_running() {
+    which nmcli > /dev/null 2>&1 || return 1
+    nmcli nm | grep -E '^running' > /dev/null 2>&1
+}
+
+networkmanager_iface_is_unmanaged() {
+    nmcli dev status | grep -E "$1.+unmanaged" > /dev/null 2>&1
+}
+
 networkmanager_add_unmanaged() {
-    [[ ! -d ${NETWORKMANAGER_CONF%/*} ]] && return
+    networkmanager_is_running || return
+    [[ -d ${NETWORKMANAGER_CONF%/*} ]] || mkdir -p ${NETWORKMANAGER_CONF%/*}
     [[ -f ${NETWORKMANAGER_CONF} ]] || touch ${NETWORKMANAGER_CONF}
     if [[ -z "$2" ]]; then
         MAC=$(get_macaddr "$1")
@@ -99,7 +109,10 @@ networkmanager_add_unmanaged() {
         sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
     fi
     ADDED_UNMANAGED=1
-    sleep 2
+    while ! networkmanager_iface_is_unmanaged "$1"; do
+        sleep 1
+    done
+    sleep 1
     echo "DONE"
 }
 
@@ -118,7 +131,10 @@ networkmanager_rm_unmanaged() {
         NEW_UNMANAGED=$(echo ${UNMANAGED} | sed -e "s/;mac:${MAC}//")
         sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
     fi
-    sleep 2
+    while networkmanager_iface_is_unmanaged "$1"; do
+        sleep 1
+    done
+    sleep 1
 }
 
 CHANNEL=1
