@@ -82,7 +82,9 @@ NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 
 networkmanager_is_running() {
     which nmcli > /dev/null 2>&1 || return 1
-    nmcli nm | grep -E '^running' > /dev/null 2>&1
+    NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
+    [[ $? -ne 0 ]] && NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
+    echo $NMCLI_OUT | grep -E '^running' > /dev/null 2>&1
 }
 
 networkmanager_iface_is_unmanaged() {
