@@ -27,11 +27,18 @@
 
 
 ## Installation
-###
+### Generic
     git clone https://github.com/oblique/create_ap
     cd create_ap
     make install
 
+### ArchLinux (AUR)
+    yaourt -S create_ap
+
+### Gentoo
+    emerge layman
+    layman -f -a jorgicio-gentoo
+    emerge net-wireless/create_ap
 
 ## Examples
 ### No passphrase (open network):
