@@ -84,11 +84,11 @@ networkmanager_is_running() {
     which nmcli > /dev/null 2>&1 || return 1
     NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
     [[ $? -ne 0 ]] && NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
-    echo $NMCLI_OUT | grep -E '^running' > /dev/null 2>&1
+    [[ "$NMCLI_OUT" == "running" ]]
 }
 
 networkmanager_iface_is_unmanaged() {
-    nmcli dev status | grep -E "$1.+unmanaged" > /dev/null 2>&1
+    nmcli -t -f DEVICE,STATE d | grep -E "^$1:unmanaged$" > /dev/null 2>&1
 }
 
 networkmanager_add_unmanaged() {
