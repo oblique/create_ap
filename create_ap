@@ -481,6 +481,13 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     iptables -I INPUT -p tcp -m tcp --dport 53 -j ACCEPT || die
     iptables -I INPUT -p udp -m udp --dport 53 -j ACCEPT || die
     iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+
+    #Stop dnsmasq service first before configuring it
+    #Trying with all major init systems
+    systemctl stop dnsmasq > /dev/null 2>&1
+    service dnsmasq stop > /dev/null 2>&1
+    /etc/init.d/dnsmasq stop > /dev/null 2>&1
+
     dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid || die
 fi
 
