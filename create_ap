@@ -438,6 +438,10 @@ EOF
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
 fi
 
+# To solve problems introduced by a bug in hostapd 2.1
+nmcli nm wifi off > /dev/null 2>&1
+rfkill unblock wlan > /dev/null 2>&1
+
 # initialize WiFi interface
 if [[ $NO_VIRT -eq 0 ]]; then
     ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die "$VIRTDIEMSG"
