@@ -33,6 +33,7 @@ usage() {
     echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
     echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt           Do not create virtual interface"
+    echo "  --kill-dnsmasq      Kill existing dnsmasq process before starting it with custom configuration"
     echo
     echo "Non-Bridging Options:"
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
@@ -149,6 +150,7 @@ IEEE80211N=0
 HT_CAPAB='[HT40+]'
 DRIVER=nl80211
 NO_VIRT=0
+KILL_DNSMASQ=0
 
 CONFDIR=
 WIFI_IFACE=
@@ -213,7 +215,7 @@ die() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","kill-dnsmasq" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -272,6 +274,10 @@ while :; do
         --no-virt)
             shift
             NO_VIRT=1
+            ;;
+        --kill-dnsmasq)
+            shift
+            KILL_DNSMASQ=1
             ;;
         --)
             shift
@@ -482,13 +488,21 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     iptables -I INPUT -p udp -m udp --dport 53 -j ACCEPT || die
     iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
 
-    #Stop dnsmasq service first before configuring it
-    #Trying with all major init systems
-    systemctl stop dnsmasq > /dev/null 2>&1
-    service dnsmasq stop > /dev/null 2>&1
-    /etc/init.d/dnsmasq stop > /dev/null 2>&1
+    if [[ $KILL_DNSMASQ -eq 1 ]]; then
+        #Stop dnsmasq service first before configuring it
+        #Trying with all major init systems
+        systemctl stop dnsmasq > /dev/null 2>&1
+        service dnsmasq stop > /dev/null 2>&1
+        /etc/init.d/dnsmasq stop > /dev/null 2>&1
+    fi
 
-    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid || die
+    if ! dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid; then
+        if [[ $KILL_DNSMASQ -eq 0 ]]; then
+            echo -e "\nCurrently running dnsmasq process seems to be interfering."
+            echo "Try running with --kill-dnsmasq switch."
+        fi
+        die
+    fi
 fi
 
 # start access point
