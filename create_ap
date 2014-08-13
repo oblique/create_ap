@@ -487,7 +487,13 @@ fi
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 trap - SIGINT # reset trap
-hostapd $CONFDIR/hostapd.conf || die "Failed to run hostapd, maybe a program is interfering."
+
+if ! hostapd $CONFDIR/hostapd.conf; then 
+    echo -e "\nError: Failed to run hostapd, maybe a program is interfering."
+    echo -e "\nIf an error like 'n80211: Could not configure driver mode' was thrown, it is probably becasue of a bug in hostapd."
+    echo "Try running 'nmcli nm wifi off; rfkill unblock wlan' before starting create_ap."
+    die
+fi
 
 cleanup
 exit 0
