@@ -431,7 +431,7 @@ else
     # dnsmasq config (dhcp + dns)
     cat << EOF > $CONFDIR/dnsmasq.conf
 interface=${WIFI_IFACE}
-bind-interfaces
+bind-dynamic
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
 EOF
