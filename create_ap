@@ -101,14 +101,17 @@ get_new_macaddr() {
 
 ADDED_UNMANAGED=0
 NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
+NM_OLDER_VERSION=1
 
 networkmanager_is_running() {
     which nmcli > /dev/null 2>&1 || return 1
     NM_VER=$(nmcli -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
     version_cmp $NM_VER 0.9.10
     if [[ $? -eq 1 ]]; then
+        NM_OLDER_VERSION=1
         NMCLI_OUT=$(nmcli -t -f RUNNING nm)
     else
+        NM_OLDER_VERSION=0
         NMCLI_OUT=$(nmcli -t -f RUNNING g)
     fi
     [[ "$NMCLI_OUT" == "running" ]]
@@ -522,10 +525,18 @@ fi
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 trap - SIGINT # reset trap
 
-if ! hostapd $CONFDIR/hostapd.conf; then 
-    echo -e "\nError: Failed to run hostapd, maybe a program is interfering."
-    echo -e "\nIf an error like 'n80211: Could not configure driver mode' was thrown, it is probably becasue of a bug in hostapd."
-    echo "Try running 'nmcli nm wifi off; rfkill unblock wlan' before starting create_ap."
+if ! hostapd $CONFDIR/hostapd.conf; then
+    echo -e "\nError: Failed to run hostapd, maybe a program is interfering." >&2
+    if networkmanager_is_running; then
+        echo "If an error like 'n80211: Could not configure driver mode' was thrown" >&2
+        echo "try running the following before starting create_ap:" >&2
+        if [[ $NM_OLDER_VERSION -eq 1 ]]; then
+            echo "    nmcli nm wifi off" >&2
+        else
+            echo "    nmcli r wifi off" >&2
+        fi
+        echo "    rfkill unblock wlan" >&2
+    fi
     die
 fi
 
