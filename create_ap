@@ -190,6 +190,8 @@ OLD_BRIDGE_IPTABLES=
 OLD_MACADDR=
 
 cleanup() {
+    trap "" SIGINT
+
     echo
     echo "Doing cleanup..."
 
