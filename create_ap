@@ -79,11 +79,18 @@ get_new_macaddr() {
 
 ADDED_UNMANAGED=0
 NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
+NMCLI_OLDER_VERSION=true
+NMCLI_RADIO_OBJ=nm
+
+[[ $(nmcli -v | awk '{print $4}') =~ ([0-9]*)\.([0-9*]\.[0-9]*)\.[0-9]* ]] && echo "${BASH_REMATCH[1]}"; echo "${BASH_REMATCH[2]}"; NMCLI_PRI_VER="${BASH_REMATCH[1]}"; NMCLI_SEC_VER="${BASH_REATCH[2]}"
+awk -v pri_ver="$NMCLI_PRI_VER" -v sec_ver="$NMCLI_SEC_VER" \
+    'BEGIN {if (pri_ver == 0 && sec_ver < 9.10) exit 1;}' \
+    || NMCLI_OLDER_VERSION=false; NMCLI_RADIO_OBJ=radio
 
 networkmanager_is_running() {
     which nmcli > /dev/null 2>&1 || return 1
     NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
-    [[ $? -ne 0 ]] && NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
+    [[ $? -ne 0 ]] && NMCLI_OUT=$(nmcli -t -f RUNNING $NMCLI_RADIO_OBJ 2> /dev/null)
     [[ "$NMCLI_OUT" == "running" ]]
 }
 
@@ -487,7 +494,13 @@ fi
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 trap - SIGINT # reset trap
-hostapd $CONFDIR/hostapd.conf || die "Failed to run hostapd, maybe a program is interfering."
+
+if ! hostapd $CONFDIR/hostapd.conf && networkmanager_is_running; then 
+    echo -e "\nError: Failed to run hostapd, maybe a program is interfering." >&2
+    echo -e "\nIf an error like 'n80211: Could not configure driver mode' was thrown, it is probably becasue of a bug in hostapd." >&2
+    echo "Try running 'nmcli $NMCLI_RADIO_OBJ wifi off; rfkill unblock wlan' before starting create_ap." >&2
+    die
+fi
 
 cleanup
 exit 0
