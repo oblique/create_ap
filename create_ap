@@ -54,6 +54,28 @@ usage() {
     echo "  $(basename $0) --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
 }
 
+# it takes 2 arguments
+# returns:
+#  0 if v1 (1st argument) and v2 (2nd argument) are the same
+#  1 if v1 is less than v2
+#  2 if v2 is greater than v2
+version_cmp() {
+    [[ ! $1 =~ ^[0-9]+(\.[0-9]+)*$ ]] && die "Wrong version format!"
+    [[ ! $2 =~ ^[0-9]+(\.[0-9]+)*$ ]] && die "Wrong version format!"
+
+    V1=( $(echo $1 | tr '.' ' ') )
+    V2=( $(echo $2 | tr '.' ' ') )
+    VN=${#V1[@]}
+    [[ $VN -lt ${#V2[@]} ]] && VN=${#V2[@]}
+
+    for ((x = 0; x < $VN; x++)); do
+        [[ ${V1[x]} -lt ${V2[x]} ]] && return 1
+        [[ ${V1[x]} -gt ${V2[x]} ]] && return 2
+    done
+
+    return 0
+}
+
 get_macaddr() {
     ip link show "$1" | grep ether | grep -Eo '([0-9a-f]{2}:){5}[0-9a-f]{2}[[:space:]]' | tr -d '[[:space:]]'
 }
@@ -82,8 +104,13 @@ NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 
 networkmanager_is_running() {
     which nmcli > /dev/null 2>&1 || return 1
-    NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
-    [[ $? -ne 0 ]] && NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
+    NM_VER=$(nmcli -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
+    version_cmp $NM_VER 0.9.10
+    if [[ $? -eq 1 ]]; then
+        NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
+    else
+        NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
+    fi
     [[ "$NMCLI_OUT" == "running" ]]
 }
 
@@ -429,9 +456,16 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
     echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
 else
     # dnsmasq config (dhcp + dns)
+    DNSMASQ_VER=$(dnsmasq -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
+    version_cmp $DNSMASQ_VER 2.63
+    if [[ $? -eq 1 ]]; then
+        DNSMASQ_BIND=bind-interfaces
+    else
+        DNSMASQ_BIND=bind-dynamic
+    fi
     cat << EOF > $CONFDIR/dnsmasq.conf
 interface=${WIFI_IFACE}
-bind-dynamic
+${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
 EOF
