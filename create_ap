@@ -107,9 +107,9 @@ networkmanager_is_running() {
     NM_VER=$(nmcli -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
     version_cmp $NM_VER 0.9.10
     if [[ $? -eq 1 ]]; then
-        NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
+        NMCLI_OUT=$(nmcli -t -f RUNNING nm)
     else
-        NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
+        NMCLI_OUT=$(nmcli -t -f RUNNING g)
     fi
     [[ "$NMCLI_OUT" == "running" ]]
 }
