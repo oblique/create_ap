@@ -242,6 +242,11 @@ die() {
     exit 1
 }
 
+clean_exit() {
+    cleanup
+    exit 0
+}
+
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
@@ -525,7 +530,9 @@ fi
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
-trap - SIGINT # reset trap
+
+# from now on we exit with 0 on SIGINT
+trap "clean_exit" SIGINT
 
 if ! hostapd $CONFDIR/hostapd.conf; then
     echo -e "\nError: Failed to run hostapd, maybe a program is interfering." >&2
@@ -542,5 +549,4 @@ if ! hostapd $CONFDIR/hostapd.conf; then
     die
 fi
 
-cleanup
-exit 0
+clean_exit
