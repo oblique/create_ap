@@ -58,7 +58,7 @@ usage() {
 # returns:
 #  0 if v1 (1st argument) and v2 (2nd argument) are the same
 #  1 if v1 is less than v2
-#  2 if v2 is greater than v2
+#  2 if v1 is greater than v2
 version_cmp() {
     [[ ! $1 =~ ^[0-9]+(\.[0-9]+)*$ ]] && die "Wrong version format!"
     [[ ! $2 =~ ^[0-9]+(\.[0-9]+)*$ ]] && die "Wrong version format!"
