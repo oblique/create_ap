@@ -144,7 +144,7 @@ networkmanager_add_unmanaged() {
     while ! networkmanager_iface_is_unmanaged "$1"; do
         sleep 1
     done
-    sleep 1
+    sleep 2
     echo "DONE"
 }
 
@@ -166,7 +166,7 @@ networkmanager_rm_unmanaged() {
     while networkmanager_iface_is_unmanaged "$1"; do
         sleep 1
     done
-    sleep 1
+    sleep 2
 }
 
 CHANNEL=1
