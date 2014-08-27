@@ -362,14 +362,19 @@ if [[ $(id -u) -ne 0 ]]; then
     exit 1
 fi
 
+WIFI_IFACE=$1
+
+if ! iw ${WIFI_IFACE} info > /dev/null 2>&1; then
+    echo "ERROR: ${WIFI_IFACE} is not a WiFi interface" >&2
+    exit 1
+fi
+
 if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
     echo "ERROR: Wrong Internet sharing method" >&2
     echo
     usage >&2
     exit 1
 fi
-
-WIFI_IFACE=$1
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
