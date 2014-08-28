@@ -76,6 +76,17 @@ version_cmp() {
     return 0
 }
 
+USE_IWCONFIG=0
+
+is_wifi_interface() {
+    which iw > /dev/null 2>&1 && iw dev $1 info > /dev/null 2>&1 && return 0
+    if which iwconfig > /dev/null 2>&1 && iwconfig $1 > /dev/null 2>&1; then
+        USE_IWCONFIG=1
+        return 0
+    fi
+    return 1
+}
+
 get_phy_device() {
     for x in /sys/class/ieee80211/*; do
         [[ ! -d "$x" ]] && continue
@@ -103,12 +114,19 @@ get_adapter_info() {
 can_transmit_to_channel() {
     IFACE=$1
     CHANNEL=$2
-    CHANNEL_INFO=$(get_adapter_info ${IFACE} | grep "MHz \[${CHANNEL}\]")
 
-    [[ -z "${CHANNEL_INFO}" ]] && return 1
-    [[ "${CHANNEL_INFO}" == *no\ IR* ]] && return 1
-    [[ "${CHANNEL_INFO}" == *disabled* ]] && return 1
-    return 0
+    if [[ $USE_IWCONFIG -eq 0 ]]; then
+        CHANNEL_INFO=$(get_adapter_info ${IFACE} | grep "MHz \[${CHANNEL}\]")
+        [[ -z "${CHANNEL_INFO}" ]] && return 1
+        [[ "${CHANNEL_INFO}" == *no\ IR* ]] && return 1
+        [[ "${CHANNEL_INFO}" == *disabled* ]] && return 1
+        return 0
+    else
+        CHANNEL=$(printf '%02d' ${CHANNEL})
+        CHANNEL_INFO=$(iwlist ${IFACE} channel | grep "Channel ${CHANNEL} :")
+        [[ -z "${CHANNEL_INFO}" ]] && return 1
+        return 0
+    fi
 }
 
 get_macaddr() {
@@ -364,9 +382,18 @@ fi
 
 WIFI_IFACE=$1
 
-if ! iw dev ${WIFI_IFACE} info > /dev/null 2>&1; then
-    echo "ERROR: ${WIFI_IFACE} is not a WiFi interface" >&2
+if ! is_wifi_interface ${WIFI_IFACE}; then
+    echo "ERROR: '${WIFI_IFACE}' is not a WiFi interface" >&2
     exit 1
+fi
+
+if [[ $NO_VIRT -eq 0 && $USE_IWCONFIG -eq 1 ]]; then
+    NO_VIRT=1
+    if which iw > /dev/null 2>&1; then
+        echo "'iw' can not recognize your adapter, virtual interface can not be created" >&2
+    else
+        echo "'iw' is not installed, virtual interface can not be created" >&2
+    fi
 fi
 
 if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
