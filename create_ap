@@ -488,7 +488,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
         die "$VIRTDIEMSG"
     fi
     OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
-    NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
+    [[ ${OLD_MACADDR} == $(get_macaddr ${WIFI_IFACE}) ]] && NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
     WIFI_IFACE=${VWIFI_IFACE}
 else
     [[ "$WIFI_IFACE" == "$INTERNET_IFACE" ]] && die "You can not share your connection from the same interface if you are using --no-virt option."
@@ -553,7 +553,7 @@ EOF
 fi
 
 # initialize WiFi interface
-if [[ $NO_VIRT -eq 0 ]]; then
+if [[ $NO_VIRT -eq 0 && -n "$NEW_MACADDR" ]]; then
     ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die "$VIRTDIEMSG"
 fi
 ip link set down dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
