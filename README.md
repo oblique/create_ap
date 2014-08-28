@@ -16,6 +16,7 @@
 * hostapd
 * iproute2
 * iw
+* iwconfig (you only need this if 'iw' can not recognize your adapter)
 * haveged (optional)
 
 ### For 'NATed' or 'None' Internet sharing method
