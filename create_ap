@@ -177,46 +177,72 @@ networkmanager_iface_is_unmanaged() {
 
 networkmanager_add_unmanaged() {
     networkmanager_is_running || return
+
     [[ -d ${NETWORKMANAGER_CONF%/*} ]] || mkdir -p ${NETWORKMANAGER_CONF%/*}
     [[ -f ${NETWORKMANAGER_CONF} ]] || touch ${NETWORKMANAGER_CONF}
+
     if [[ -z "$2" ]]; then
         MAC=$(get_macaddr "$1")
     else
         MAC="$2"
     fi
+
     UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
     [[ $UNMANAGED == *mac:${MAC}* ]] && return
+    [[ $NM_OLDER_VERSION -eq 0 && $UNMANAGED =~ .*interface-name:${1}([[:blank:];,#]|$) ]] && return
+
     echo -n "Network Manager config found, set $1 as unmanaged device... "
+
     grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1 || echo -e '\n\n[keyfile]' >> ${NETWORKMANAGER_CONF}
-    if [[ -z ${UNMANAGED} ]]; then
-        sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
+
+    if [[ $NM_OLDER_VERSION -eq 1 ]]; then
+        if [[ -z ${UNMANAGED} ]]; then
+            sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
+        else
+            NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;,-]*\)/\1;mac:${MAC}/")
+            sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+        fi
     else
-        NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;-]*\)/\1;mac:${MAC}/")
-        sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+        if [[ -z ${UNMANAGED} ]]; then
+            sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=interface-name:${1}/" -i ${NETWORKMANAGER_CONF}
+        else
+            NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;,-]*\)/\1;interface-name:${1}/")
+            sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+        fi
     fi
+
     ADDED_UNMANAGED=1
+
     while ! networkmanager_iface_is_unmanaged "$1"; do
         sleep 1
     done
     sleep 2
+
     echo "DONE"
 }
 
 networkmanager_rm_unmanaged() {
     [[ $ADDED_UNMANAGED -eq 0 ]] && return
+    networkmanager_is_running || return
+
     [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
+
     if [[ -z "$2" ]]; then
         MAC=$(get_macaddr "$1")
     else
         MAC="$2"
     fi
+
     UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
-    if [[ $UNMANAGED != *\;* ]]; then
+    if [[ $UNMANAGED != *\;* && $UNMANAGED != *,* ]]; then
         sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
+        sed -e "/^unmanaged-devices=interface-name:${1}/d" -i ${NETWORKMANAGER_CONF}
     else
-        NEW_UNMANAGED=$(echo ${UNMANAGED} | sed -e "s/;mac:${MAC}//")
+        NEW_UNMANAGED=$(echo ${UNMANAGED} | sed -e "s/[;,]mac:${MAC}//")
+        NEW_UNMANAGED=$(echo ${NEW_UNMANAGED} | sed -e "s/[;,]interface-name:${1}//")
         sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
     fi
+
     while networkmanager_iface_is_unmanaged "$1"; do
         sleep 1
     done
