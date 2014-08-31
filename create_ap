@@ -157,15 +157,23 @@ ADDED_UNMANAGED=0
 NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 NM_OLDER_VERSION=1
 
-networkmanager_is_running() {
+networkmanager_exists() {
     which nmcli > /dev/null 2>&1 || return 1
     NM_VER=$(nmcli -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
     version_cmp $NM_VER 0.9.10
     if [[ $? -eq 1 ]]; then
         NM_OLDER_VERSION=1
-        NMCLI_OUT=$(nmcli -t -f RUNNING nm)
     else
         NM_OLDER_VERSION=0
+    fi
+    return 0
+}
+
+networkmanager_is_running() {
+    networkmanager_exists || return 1
+    if [[ $NM_OLDER_VERSION -eq 1 ]]; then
+        NMCLI_OUT=$(nmcli -t -f RUNNING nm)
+    else
         NMCLI_OUT=$(nmcli -t -f RUNNING g)
     fi
     [[ "$NMCLI_OUT" == "running" ]]
@@ -175,79 +183,102 @@ networkmanager_iface_is_unmanaged() {
     nmcli -t -f DEVICE,STATE d | grep -E "^$1:unmanaged$" > /dev/null 2>&1
 }
 
+ADDED_UNMANAGED=
+
 networkmanager_add_unmanaged() {
-    networkmanager_is_running || return
+    networkmanager_exists || return 1
 
     [[ -d ${NETWORKMANAGER_CONF%/*} ]] || mkdir -p ${NETWORKMANAGER_CONF%/*}
     [[ -f ${NETWORKMANAGER_CONF} ]] || touch ${NETWORKMANAGER_CONF}
 
-    if [[ -z "$2" ]]; then
-        MAC=$(get_macaddr "$1")
-    else
-        MAC="$2"
+    if [[ $NM_OLDER_VERSION -eq 1 ]]; then
+        if [[ -z "$2" ]]; then
+            MAC=$(get_macaddr "$1")
+        else
+            MAC="$2"
+        fi
+        [[ -z "$MAC" ]] && return 1
     fi
 
-    UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
-    [[ $UNMANAGED == *mac:${MAC}* ]] && return
-    [[ $NM_OLDER_VERSION -eq 0 && $UNMANAGED =~ .*interface-name:${1}([[:blank:];,#]|$) ]] && return
+    UNMANAGED=$(grep -m1 -Eo '^unmanaged-devices=[[:alnum:]:;,-]*' /etc/NetworkManager/NetworkManager.conf | sed 's/unmanaged-devices=//' | tr ';,' ' ')
+    WAS_EMPTY=0
+    [[ -z "$UNMANAGED" ]] && WAS_EMPTY=1
 
-    echo -n "Network Manager config found, set $1 as unmanaged device... "
-
-    grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1 || echo -e '\n\n[keyfile]' >> ${NETWORKMANAGER_CONF}
+    for x in $UNMANAGED; do
+        [[ $x == "mac:${MAC}" ]] && return 2
+        [[ $NM_OLDER_VERSION -eq 0 && $x == "interface-name:${1}" ]] && return 2
+    done
 
     if [[ $NM_OLDER_VERSION -eq 1 ]]; then
-        if [[ -z ${UNMANAGED} ]]; then
-            sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
-        else
-            NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;,-]*\)/\1;mac:${MAC}/")
-            sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
-        fi
+        UNMANAGED="${UNMANAGED} mac:${MAC}"
     else
-        if [[ -z ${UNMANAGED} ]]; then
-            sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=interface-name:${1}/" -i ${NETWORKMANAGER_CONF}
-        else
-            NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;,-]*\)/\1;interface-name:${1}/")
-            sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
-        fi
+        UNMANAGED="${UNMANAGED} interface-name:${1}"
     fi
 
-    ADDED_UNMANAGED=1
+    UNMANAGED=$(echo $UNMANAGED | sed -e 's/^ //')
+    UNMANAGED="${UNMANAGED// /;}"
+    UNMANAGED="unmanaged-devices=${UNMANAGED}"
 
+    if ! grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1; then
+        echo -e "\n\n[keyfile]\n${UNMANAGED}" >> ${NETWORKMANAGER_CONF}
+    elif [[ $WAS_EMPTY -eq 1 ]]; then
+        sed -e "s/^\(\[keyfile\].*\)$/\1\n${UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    else
+        sed -e "s/^unmanaged-devices=.*/${UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    fi
+
+    ADDED_UNMANAGED="${ADDED_UNMANAGED} ${1} "
+
+    return 0
+}
+
+networkmanager_rm_unmanaged() {
+    networkmanager_exists || return 1
+    [[ ! -f ${NETWORKMANAGER_CONF} ]] && return 1
+
+    if [[ $NM_OLDER_VERSION -eq 1 ]]; then
+        if [[ -z "$2" ]]; then
+            MAC=$(get_macaddr "$1")
+        else
+            MAC="$2"
+        fi
+        [[ -z "$MAC" ]] && return 1
+    fi
+
+    UNMANAGED=$(grep -m1 -Eo '^unmanaged-devices=[[:alnum:]:;,-]*' /etc/NetworkManager/NetworkManager.conf | sed 's/unmanaged-devices=//' | tr ';,' ' ')
+
+    [[ -z "$UNMANAGED" ]] && return 1
+
+    [[ -n "$MAC" ]] && UNMANAGED=$(echo $UNMANAGED | sed -e "s/mac:${MAC}\( \|$\)//g")
+    UNMANAGED=$(echo $UNMANAGED | sed -e "s/interface-name:${1}\( \|$\)//g")
+    UNMANAGED=$(echo $UNMANAGED | sed -e 's/ $//')
+
+    if [[ -z "$UNMANAGED" ]]; then
+        sed -e "/^unmanaged-devices=.*/d" -i ${NETWORKMANAGER_CONF}
+    else
+        UNMANAGED="${UNMANAGED// /;}"
+        UNMANAGED="unmanaged-devices=${UNMANAGED}"
+        sed -e "s/^unmanaged-devices=.*/${UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    fi
+
+    ADDED_UNMANAGED="${ADDED_UNMANAGED/ ${1} /}"
+
+    return 0
+}
+
+networkmanager_rm_unmanaged_if_needed() {
+    [[ $ADDED_UNMANAGED =~ .*\ ${1}\ .* ]] && networkmanager_rm_unmanaged ${1}
+}
+
+networkmanager_wait_until_unmanaged() {
+    networkmanager_is_running || return 1
     while ! networkmanager_iface_is_unmanaged "$1"; do
         sleep 1
     done
     sleep 2
-
-    echo "DONE"
+    return 0
 }
 
-networkmanager_rm_unmanaged() {
-    [[ $ADDED_UNMANAGED -eq 0 ]] && return
-    networkmanager_is_running || return
-
-    [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
-
-    if [[ -z "$2" ]]; then
-        MAC=$(get_macaddr "$1")
-    else
-        MAC="$2"
-    fi
-
-    UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
-    if [[ $UNMANAGED != *\;* && $UNMANAGED != *,* ]]; then
-        sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
-        sed -e "/^unmanaged-devices=interface-name:${1}/d" -i ${NETWORKMANAGER_CONF}
-    else
-        NEW_UNMANAGED=$(echo ${UNMANAGED} | sed -e "s/[;,]mac:${MAC}//")
-        NEW_UNMANAGED=$(echo ${NEW_UNMANAGED} | sed -e "s/[;,]interface-name:${1}//")
-        sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
-    fi
-
-    while networkmanager_iface_is_unmanaged "$1"; do
-        sleep 1
-    done
-    sleep 2
-}
 
 CHANNEL=1
 GATEWAY=192.168.12.1
@@ -306,13 +337,13 @@ cleanup() {
         if [[ -n $VWIFI_IFACE ]]; then
             ip link set down dev ${VWIFI_IFACE}
             ip addr flush ${VWIFI_IFACE}
-            networkmanager_rm_unmanaged ${VWIFI_IFACE} ${OLD_MACADDR}
+            networkmanager_rm_unmanaged_if_needed ${VWIFI_IFACE} ${OLD_MACADDR}
             iw dev ${VWIFI_IFACE} del
         fi
     else
         ip link set down dev ${WIFI_IFACE}
         ip addr flush ${WIFI_IFACE}
-        networkmanager_rm_unmanaged ${WIFI_IFACE}
+        networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE}
     fi
 }
 
@@ -496,6 +527,17 @@ echo "Config dir: $CONFDIR"
 
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=${WIFI_IFACE}ap
+
+    # in NetworkManager 0.9.10 and above we can set the interface as unmanaged without
+    # the need of MAC address, so we set it before we create the virtual interface.
+    if networkmanager_exists && [[ $NM_OLDER_VERSION -eq 0 ]]; then
+        echo -n "Network Manager found, set $1 as unmanaged device... "
+        networkmanager_add_unmanaged ${VWIFI_IFACE}
+        # do not call networkmanager_wait_until_unmanaged because interface does not
+        # exist yet
+        echo "DONE"
+    fi
+
     WIFI_IFACE_CHANNEL=$(iw dev ${WIFI_IFACE} info | grep channel | awk '{print $2}')
 
     if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
@@ -508,6 +550,8 @@ if [[ $NO_VIRT -eq 0 ]]; then
     echo -n "Creating a virtual WiFi interface... "
     iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
+        # now we can call networkmanager_wait_until_unmanaged
+        networkmanager_exists && [[ $NM_OLDER_VERSION -eq 0 ]] && networkmanager_wait_until_unmanaged ${VWIFI_IFACE}
         echo "${VWIFI_IFACE} created."
     else
         VWIFI_IFACE=
@@ -522,7 +566,12 @@ fi
 
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}."
 
-networkmanager_add_unmanaged ${WIFI_IFACE}
+if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
+    echo -n "Network Manager found, set $1 as unmanaged device... "
+    networkmanager_add_unmanaged ${WIFI_IFACE}
+    networkmanager_wait_until_unmanaged ${WIFI_IFACE}
+    echo "DONE"
+fi
 
 [[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
