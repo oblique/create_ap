@@ -259,7 +259,7 @@ cleanup() {
 
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE > /dev/null 2>&1 
+            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE > /dev/null 2>&1
             iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT > /dev/null 2>&1
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT > /dev/null 2>&1
             [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
