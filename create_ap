@@ -530,7 +530,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
 
     # in NetworkManager 0.9.10 and above we can set the interface as unmanaged without
     # the need of MAC address, so we set it before we create the virtual interface.
-    if networkmanager_exists && [[ $NM_OLDER_VERSION -eq 0 ]]; then
+    if networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]]; then
         echo -n "Network Manager found, set $1 as unmanaged device... "
         networkmanager_add_unmanaged ${VWIFI_IFACE}
         # do not call networkmanager_wait_until_unmanaged because interface does not
@@ -551,7 +551,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
     iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
         # now we can call networkmanager_wait_until_unmanaged
-        networkmanager_exists && [[ $NM_OLDER_VERSION -eq 0 ]] && networkmanager_wait_until_unmanaged ${VWIFI_IFACE}
+        networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]] && networkmanager_wait_until_unmanaged ${VWIFI_IFACE}
         echo "${VWIFI_IFACE} created."
     else
         VWIFI_IFACE=
@@ -566,7 +566,7 @@ fi
 
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}."
 
-if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
+if networkmanager_is_running && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
     echo -n "Network Manager found, set $1 as unmanaged device... "
     networkmanager_add_unmanaged ${WIFI_IFACE}
     networkmanager_wait_until_unmanaged ${WIFI_IFACE}
