@@ -112,6 +112,21 @@ get_adapter_info() {
     iw phy $PHY info
 }
 
+can_have_sta_and_ap() {
+    # iwconfig does not provide this information, assume false
+    [[ $USE_IWCONFIG -eq 1 ]] && return 1
+    get_adapter_info "$1" | grep -E '{.* managed.* AP.*}' > /dev/null 2>&1 && return 0
+    get_adapter_info "$1" | grep -E '{.* AP.* managed.*}' > /dev/null 2>&1 && return 0
+    return 1
+}
+
+can_have_ap() {
+    # iwconfig does not provide this information, assume true
+    [[ $USE_IWCONFIG -eq 1 ]] && return 0
+    get_adapter_info "$1" | grep -E '\* AP$' > /dev/null 2>&1 && return 0
+    return 1
+}
+
 can_transmit_to_channel() {
     IFACE=$1
     CHANNEL=$2
@@ -128,6 +143,15 @@ can_transmit_to_channel() {
         [[ -z "${CHANNEL_INFO}" ]] && return 1
         return 0
     fi
+}
+
+is_wifi_connected() {
+    if [[ $USE_IWCONFIG -eq 0 ]]; then
+        iw dev "$1" link 2>&1 | grep -E '^Connected to' > /dev/null 2>&1 && return 0
+    else
+        iwconfig "$1" 2>&1 | grep -E 'Access Point: [0-9a-fA-F]{2}:' > /dev/null 2>&1 && return 0
+    fi
+    return 1
 }
 
 get_macaddr() {
@@ -445,12 +469,18 @@ if ! is_wifi_interface ${WIFI_IFACE}; then
     exit 1
 fi
 
-if [[ $NO_VIRT -eq 0 && $USE_IWCONFIG -eq 1 ]]; then
-    NO_VIRT=1
-    if which iw > /dev/null 2>&1; then
-        echo "'iw' can not recognize your adapter, virtual interface can not be created" >&2
-    else
-        echo "'iw' is not installed, virtual interface can not be created" >&2
+if ! can_have_ap ${WIFI_IFACE}; then
+    echo "ERROR: Your adapter does not support AP (master) mode" >&2
+    exit 1
+fi
+
+if ! can_have_sta_and_ap ${WIFI_IFACE}; then
+    if is_wifi_connected ${WIFI_IFACE}; then
+        echo "ERROR: Your adapter can not be connected to an AP and at the same time transmit as an AP" >&2
+        exit 1
+    elif [[ $NO_VIRT -eq 0 ]]; then
+        echo "WARN: Your adapter does not fully support AP virtual interface, enabling --no-virt" >&2
+        NO_VIRT=1
     fi
 fi
 
@@ -522,6 +552,12 @@ else
     fi
 fi
 
+if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
+    echo -n "ERROR: You can not share your connection from the same" >&2
+    echo " interface if you are using --no-virt option." >&2
+    exit 1
+fi
+
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 
@@ -560,8 +596,6 @@ if [[ $NO_VIRT -eq 0 ]]; then
     OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
     [[ ${OLD_MACADDR} == $(get_macaddr ${WIFI_IFACE}) ]] && NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
     WIFI_IFACE=${VWIFI_IFACE}
-else
-    [[ "$WIFI_IFACE" == "$INTERNET_IFACE" ]] && die "You can not share your connection from the same interface if you are using --no-virt option."
 fi
 
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}."
