@@ -345,6 +345,16 @@ cleanup() {
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT > /dev/null 2>&1
             [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+            ip route show dev $BRIDGE_IFACE | grep -v -E '^default' | while read x; do
+                ip route del $x dev $BRIDGE_IFACE
+                ip route add $x dev $INTERNET_IFACE
+            done
+
+            ip route show dev $BRIDGE_IFACE | grep -E '^default' | while read x; do
+                ip route del $x dev $BRIDGE_IFACE
+                ip route add $x dev $INTERNET_IFACE
+            done
+
             ip link set down $BRIDGE_IFACE
             brctl delbr $BRIDGE_IFACE
             [[ -n $OLD_BRIDGE_IPTABLES ]] && echo $OLD_BRIDGE_IPTABLES > /proc/sys/net/bridge/bridge-nf-call-iptables
@@ -686,7 +696,45 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # create and initialize bridged interface
         brctl addbr ${BRIDGE_IFACE} || die
         brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE} || die
+
+        # to initialize the bridge interface correctly we need to do the following:
+        #
+        # 1) duplicate the IPs of INTERNET_IFACE to BRIDGE_IFACE
+        # 2) duplicate routing table of INTERNET_IFACE to BRIDGE_IFACE
+        # 3) delete routing table of INTERNET_IFACE
+        # NOTE: we don't need to delete the IPs of INTERNET_IFACE
+        #
+        # we need the above because BRIDGE_IFACE is the master interface from now on
+        # and it must know where is connected, otherwise connection is lost.
         ip link set dev ${BRIDGE_IFACE} up || die
+
+        ip addr show $INTERNET_IFACE | grep -E '[[:blank:]]+inet ' | while read x; do
+            IPADDR=$(echo $x | sed 's/inet \([^ ]*\).*/\1/')
+            BRDADDR=
+            if [[ $x == *\ brd\ * ]]; then
+                BRDADDR=$(echo $x | sed 's/.* brd \([^ ]*\).*/\1/')
+            fi
+            if [[ -n "$BRDADDR" ]]; then
+                ip addr add $IPADDR broadcast $BRDADDR dev $BRIDGE_IFACE || die
+            else
+                ip addr add $IPADDR dev $BRIDGE_IFACE || die
+            fi
+        done
+
+        # remove any existing entries that were added from 'ip addr add'
+        ip route flush dev $BRIDGE_IFACE || die
+
+        # we must first add the entries that specify the subnets and then the
+        # gateway entry, otherwise 'ip addr add' will return an error
+        ip route show dev $INTERNET_IFACE | grep -v -E '^default' | while read x; do
+            ip route del $x dev $INTERNET_IFACE || die
+            ip route add $x dev $BRIDGE_IFACE || die
+        done
+
+        ip route show dev $INTERNET_IFACE | grep -E '^default' | while read x; do
+            ip route del $x dev $INTERNET_IFACE || die
+            ip route add $x dev $BRIDGE_IFACE || die
+        done
     fi
 else
     echo "No Internet sharing"
