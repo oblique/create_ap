@@ -54,6 +54,9 @@
 ### Bridged Internet sharing:
     create_ap -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase
 
+### Bridged Internet sharing (pre-configured bridge interface):
+    create_ap -m bridge wlan0 br0 MyAccessPoint MyPassPhrase
+
 ### Internet sharing from the same WiFi interface:
     create_ap wlan0 wlan0 MyAccessPoint MyPassPhrase
 
