@@ -38,7 +38,7 @@
 
 ### Gentoo
     emerge layman
-    layman -f -a jorgicio-gentoo
+    layman -o https://raw.githubusercontent.com/jorgicio/jorgicio-gentoo/master/jorgicio-repo.xml -f -a jorgicio-gentoo
     emerge net-wireless/create_ap
 
 ## Examples
