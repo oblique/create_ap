@@ -229,9 +229,10 @@ networkmanager_add_unmanaged() {
         [[ -z "$MAC" ]] && return 1
     fi
 
-    UNMANAGED=$(grep -m1 -Eo '^unmanaged-devices=[[:alnum:]:;,-]*' /etc/NetworkManager/NetworkManager.conf | sed 's/unmanaged-devices=//' | tr ';,' ' ')
+    UNMANAGED=$(grep -m1 -Eo '^unmanaged-devices=[[:alnum:]:;,-]*' /etc/NetworkManager/NetworkManager.conf)
     WAS_EMPTY=0
     [[ -z "$UNMANAGED" ]] && WAS_EMPTY=1
+    UNMANAGED=$(echo "$UNMANAGED" | sed 's/unmanaged-devices=//' | tr ';,' ' ')
 
     for x in $UNMANAGED; do
         [[ $x == "mac:${MAC}" ]] && return 2
