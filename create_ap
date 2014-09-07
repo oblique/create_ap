@@ -566,10 +566,21 @@ else
         INTERNET_IFACE=$2
     fi
     if tty -s; then
-        read -p "SSID: " SSID
+        while :; do
+            read -p "SSID: " SSID
+            if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
+                echo "ERROR: Invalid SSID length ${#SSID} (expected 1..32)" >&2
+                continue
+            fi
+            break
+        done
         while :; do
             read -p "Passphrase: " -s PASSPHRASE
             echo
+            if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+                echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+                continue
+            fi
             read -p "Retype passphrase: " -s PASSPHRASE2
             echo
             if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
@@ -586,6 +597,16 @@ fi
 
 if [[ "$SHARE_METHOD" != "none" ]] && ! is_interface $INTERNET_IFACE; then
     echo "ERROR: '${INTERNET_IFACE}' is not an interface" >&2
+    exit 1
+fi
+
+if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
+    echo "ERROR: Invalid SSID length ${#SSID} (expected 1..32)" >&2
+    exit 1
+fi
+
+if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
     exit 1
 fi
 
