@@ -728,7 +728,7 @@ else
         DNSMASQ_BIND=bind-dynamic
     fi
     cat << EOF > $CONFDIR/dnsmasq.conf
-interface=${WIFI_IFACE}
+listen-address=${GATEWAY}
 ${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
