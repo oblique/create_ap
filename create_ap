@@ -302,7 +302,7 @@ networkmanager_rm_unmanaged() {
 }
 
 networkmanager_rm_unmanaged_if_needed() {
-    [[ $ADDED_UNMANAGED =~ .*\ ${1}\ .* ]] && networkmanager_rm_unmanaged ${1}
+    [[ $ADDED_UNMANAGED =~ .*\ ${1}\ .* ]] && networkmanager_rm_unmanaged $1 $2
 }
 
 networkmanager_wait_until_unmanaged() {
