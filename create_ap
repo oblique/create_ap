@@ -102,7 +102,7 @@ is_bridge_interface() {
 
 get_phy_device() {
     for x in /sys/class/ieee80211/*; do
-        [[ ! -d "$x" ]] && continue
+        [[ ! -e "$x" ]] && continue
         if [[ "${x##*/}" = "$1" ]]; then
             echo $1
             return 0
@@ -116,6 +116,23 @@ get_phy_device() {
     done
     echo "Failed to get phy interface" >&2
     return 1
+}
+
+get_virt_interfaces() {
+    PHY=$(get_phy_device "$1")
+
+    if [[ -e "/sys/class/ieee80211/${PHY}/device/net/" ]]; then
+        for x in /sys/class/ieee80211/${PHY}/device/net/*; do
+            [[ ! -e "$x" ]] && continue
+            echo ${x##*/}
+        done
+        return
+    fi
+
+    for x in /sys/class/ieee80211/${PHY}/device/net:*; do
+        [[ ! -e "$x" ]] && continue
+        echo ${x##*:}
+    done
 }
 
 get_adapter_info() {
@@ -659,8 +676,23 @@ if [[ $NO_VIRT -eq 0 ]]; then
     VIRTDIEMSG="Maybe your WiFi adapter does not fully support virtual interfaces.
        Try again with --no-virt."
     echo -n "Creating a virtual WiFi interface... "
+
     iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
+    VIRT_IFACES=" $(get_virt_interfaces ${WIFI_IFACE}) "
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
+        # some distributions (such as Ubuntu) have udev rules that they rename
+        # the new virtual interface. in this case, forcefully rename it back
+        # to the name we want
+        if ! is_wifi_interface ${VWIFI_IFACE}; then
+            for x in $(get_virt_interfaces ${WIFI_IFACE}); do
+                if [[ "$VIRT_IFACES" != *\ ${x}\ * ]]; then
+                    ip link set dev $x down || die
+                    ip link set dev $x name $VWIFI_IFACE || die
+                    break
+                fi
+            done
+        fi
+
         # now we can call networkmanager_wait_until_unmanaged
         networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]] && networkmanager_wait_until_unmanaged ${VWIFI_IFACE}
         echo "${VWIFI_IFACE} created."
