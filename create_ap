@@ -654,7 +654,14 @@ CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 
 if [[ $NO_VIRT -eq 0 ]]; then
-    VWIFI_IFACE=ap${WIFI_IFACE}
+    i=0
+    while :; do
+        if [[ ! -d /sys/class/net/ap${i} ]]; then
+            VWIFI_IFACE=ap${i}
+            break
+        fi
+        i=$((i+1))
+    done
 
     # in NetworkManager 0.9.10 and above we can set the interface as unmanaged without
     # the need of MAC address, so we set it before we create the virtual interface.
