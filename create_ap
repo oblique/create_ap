@@ -209,8 +209,9 @@ get_virt_iface_name() {
 
 get_new_macaddr() {
     OLDMAC=$(get_macaddr "$1")
-    for i in {20..255}; do
-        NEWMAC="${OLDMAC%:*}:$(printf %02x $i)"
+    LAST_BYTE=$(printf %d 0x${OLDMAC##*:})
+    for i in {1..255}; do
+        NEWMAC="${OLDMAC%:*}:$(printf %02x $(( ($LAST_BYTE + $i) % 256 )))"
         (ip link | grep "ether ${NEWMAC}" > /dev/null 2>&1) || break
     done
     echo $NEWMAC
