@@ -189,11 +189,13 @@ get_macaddr() {
 }
 
 get_avail_bridge() {
-    for i in {0..100}; do
-        if ! is_bridge_interface "br${i}"; then
-            echo "br${i}"
+    i=0
+    while :; do
+        if ! is_interface br${i}; then
+            echo br${i}
             return
         fi
+        i=$((i + 1))
     done
 }
 
@@ -651,11 +653,6 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
         BRIDGE_IFACE=$INTERNET_IFACE
     else
         BRIDGE_IFACE=$(get_avail_bridge)
-    fi
-
-    if [[ -z $BRIDGE_IFACE ]]; then
-        echo "ERROR: No availabe bridges < br100" >&2
-        exit 1
     fi
 elif [[ "$SHARE_METHOD" == "nat" ]]; then
     OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
