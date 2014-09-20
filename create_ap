@@ -84,7 +84,7 @@ USE_IWCONFIG=0
 
 is_interface() {
     [[ -z "$1" ]] && return 1
-    ip link show $1 > /dev/null 2>&1
+    [[ -d "/sys/class/net/${1}" ]]
 }
 
 is_wifi_interface() {
@@ -184,7 +184,8 @@ is_wifi_connected() {
 }
 
 get_macaddr() {
-    ip link show "$1" | grep ether | grep -Eo '([0-9a-f]{2}:){5}[0-9a-f]{2}[[:space:]]' | tr -d '[[:space:]]'
+    is_interface "$1" || return
+    cat "/sys/class/net/${1}/address"
 }
 
 get_avail_bridge() {
@@ -199,12 +200,16 @@ get_avail_bridge() {
 get_virt_iface_name() {
     i=0
     while :; do
-        if [[ ! -d /sys/class/net/ap${i} ]]; then
+        if ! is_interface ap${i}; then
             echo ap${i}
-            break
+            return
         fi
         i=$((i+1))
     done
+}
+
+get_all_macaddrs() {
+    cat /sys/class/net/*/address
 }
 
 get_new_macaddr() {
@@ -212,7 +217,7 @@ get_new_macaddr() {
     LAST_BYTE=$(printf %d 0x${OLDMAC##*:})
     for i in {1..255}; do
         NEWMAC="${OLDMAC%:*}:$(printf %02x $(( ($LAST_BYTE + $i) % 256 )))"
-        (ip link | grep "ether ${NEWMAC}" > /dev/null 2>&1) || break
+        (get_all_macaddrs | grep "$NEWMAC" > /dev/null 2>&1) || break
     done
     echo $NEWMAC
 }
@@ -689,7 +694,6 @@ if [[ $NO_VIRT -eq 0 ]]; then
        Try again with --no-virt."
     echo -n "Creating a virtual WiFi interface... "
 
-    iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
     VIRT_IFACES=" $(get_virt_interfaces ${WIFI_IFACE}) "
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
         # some distributions (such as Ubuntu) have udev rules that they rename
