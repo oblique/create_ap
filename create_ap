@@ -714,7 +714,9 @@ if [[ $NO_VIRT -eq 0 ]]; then
         die "$VIRTDIEMSG"
     fi
     OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
-    [[ ${OLD_MACADDR} == $(get_macaddr ${WIFI_IFACE}) ]] && NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
+    if [[ $(get_all_macaddrs | grep -c ${OLD_MACADDR}) -ne 1 ]]; then
+        NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
+    fi
     WIFI_IFACE=${VWIFI_IFACE}
 fi
 
