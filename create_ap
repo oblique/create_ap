@@ -141,7 +141,7 @@ get_adapter_info() {
     iw phy $PHY info
 }
 
-can_have_sta_and_ap() {
+can_be_sta_and_ap() {
     # iwconfig does not provide this information, assume false
     [[ $USE_IWCONFIG -eq 1 ]] && return 1
     get_adapter_info "$1" | grep -E '{.* managed.* AP.*}' > /dev/null 2>&1 && return 0
@@ -149,7 +149,7 @@ can_have_sta_and_ap() {
     return 1
 }
 
-can_have_ap() {
+can_be_ap() {
     # iwconfig does not provide this information, assume true
     [[ $USE_IWCONFIG -eq 1 ]] && return 0
     get_adapter_info "$1" | grep -E '\* AP$' > /dev/null 2>&1 && return 0
@@ -548,14 +548,14 @@ if ! is_wifi_interface ${WIFI_IFACE}; then
     exit 1
 fi
 
-if ! can_have_ap ${WIFI_IFACE}; then
+if ! can_be_ap ${WIFI_IFACE}; then
     echo "ERROR: Your adapter does not support AP (master) mode" >&2
     exit 1
 fi
 
-if ! can_have_sta_and_ap ${WIFI_IFACE}; then
+if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     if is_wifi_connected ${WIFI_IFACE}; then
-        echo "ERROR: Your adapter can not be connected to an AP and at the same time transmit as an AP" >&2
+        echo "ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time" >&2
         exit 1
     elif [[ $NO_VIRT -eq 0 ]]; then
         echo "WARN: Your adapter does not fully support AP virtual interface, enabling --no-virt" >&2
