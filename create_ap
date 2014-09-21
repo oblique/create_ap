@@ -233,7 +233,8 @@ networkmanager_is_running() {
 }
 
 networkmanager_iface_is_unmanaged() {
-    nmcli -t -f DEVICE,STATE d | grep -E "^$1:unmanaged$" > /dev/null 2>&1
+    is_interface "$1" || return 2
+    (nmcli -t -f DEVICE,STATE d | grep -E "^$1:unmanaged$" > /dev/null 2>&1) || return 1
 }
 
 ADDED_UNMANAGED=
@@ -326,7 +327,12 @@ networkmanager_rm_unmanaged_if_needed() {
 
 networkmanager_wait_until_unmanaged() {
     networkmanager_is_running || return 1
-    while ! networkmanager_iface_is_unmanaged "$1"; do
+    while :; do
+        networkmanager_iface_is_unmanaged "$1"
+        RES=$?
+        [[ $RES -eq 0 ]] && break
+        [[ $RES -eq 2 ]] && die "Interface '${1}' does not exists.
+       It's probably renamed by a udev rule."
         sleep 1
     done
     sleep 2
