@@ -16,6 +16,11 @@
 # dependencies for 'bridge' Internet sharing method
 #    bridge-utils
 
+
+# make sure that all command outputs are in english
+# so we can parse them correctly
+export LC_ALL=C
+
 usage() {
     echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
     echo
