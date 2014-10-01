@@ -162,6 +162,24 @@ can_transmit_to_channel() {
     fi
 }
 
+# taken from iw/util.c
+ieee80211_frequency_to_channel() {
+    FREQ=$1
+    if [[ $FREQ -eq 2484 ]]; then
+        echo 14
+    elif [[ $FREQ -lt 2484 ]]; then
+        echo $(( ($FREQ - 2407) / 5 ))
+    elif [[ $FREQ -ge 4910 && $FREQ -le 4980 ]]; then
+        echo $(( ($FREQ - 4000) / 5 ))
+    elif [[ $FREQ -le 45000 ]]; then
+        echo $(( ($FREQ - 5000) / 5 ))
+    elif [[ $FREQ -ge 58320 && $FREQ -le 64800 ]]; then
+        echo $(( ($FREQ - 56160) / 2160 ))
+    else
+        echo 0
+    fi
+}
+
 is_wifi_connected() {
     if [[ $USE_IWCONFIG -eq 0 ]]; then
         iw dev "$1" link 2>&1 | grep -E '^Connected to' > /dev/null 2>&1 && return 0
@@ -674,11 +692,14 @@ if [[ $NO_VIRT -eq 0 ]]; then
         echo "DONE"
     fi
 
-    WIFI_IFACE_CHANNEL=$(iw dev ${WIFI_IFACE} info | grep channel | awk '{print $2}')
-
-    if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
-        echo "hostapd will fail to use channel $CHANNEL because $WIFI_IFACE is already set to channel $WIFI_IFACE_CHANNEL, fallback to channel $WIFI_IFACE_CHANNEL."
-        CHANNEL=$WIFI_IFACE_CHANNEL
+    if is_wifi_connected ${WIFI_IFACE}; then
+        WIFI_IFACE_FREQ=$(iw dev ${WIFI_IFACE} link | grep -i freq | awk '{print $2}')
+        WIFI_IFACE_CHANNEL=$(ieee80211_frequency_to_channel ${WIFI_IFACE_FREQ})
+        echo "${WIFI_IFACE} is already set at channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
+        if [[ $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
+            echo "We can not set to channel ${CHANNEL}, fallback to channel ${WIFI_IFACE_CHANNEL}"
+            CHANNEL=$WIFI_IFACE_CHANNEL
+        fi
     fi
 
     VIRTDIEMSG="Maybe your WiFi adapter does not fully support virtual interfaces.
