@@ -695,10 +695,12 @@ if [[ $NO_VIRT -eq 0 ]]; then
     if is_wifi_connected ${WIFI_IFACE}; then
         WIFI_IFACE_FREQ=$(iw dev ${WIFI_IFACE} link | grep -i freq | awk '{print $2}')
         WIFI_IFACE_CHANNEL=$(ieee80211_frequency_to_channel ${WIFI_IFACE_FREQ})
-        echo "${WIFI_IFACE} is already set at channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
+        echo -n "${WIFI_IFACE} is already associated with channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
         if [[ $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
-            echo "We can not set to channel ${CHANNEL}, fallback to channel ${WIFI_IFACE_CHANNEL}"
+            echo ", fallback to channel ${WIFI_IFACE_CHANNEL}"
             CHANNEL=$WIFI_IFACE_CHANNEL
+        else
+            echo
         fi
     fi
 
