@@ -239,7 +239,7 @@ NM_OLDER_VERSION=1
 networkmanager_exists() {
     which nmcli > /dev/null 2>&1 || return 1
     NM_VER=$(nmcli -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
-    version_cmp $NM_VER 0.9.10
+    version_cmp $NM_VER 0.9.9
     if [[ $? -eq 1 ]]; then
         NM_OLDER_VERSION=1
     else
@@ -700,7 +700,7 @@ echo "Config dir: $CONFDIR"
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=$(get_virt_iface_name)
 
-    # in NetworkManager 0.9.10 and above we can set the interface as unmanaged without
+    # in NetworkManager 0.9.9 and above we can set the interface as unmanaged without
     # the need of MAC address, so we set it before we create the virtual interface.
     if networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]]; then
         echo -n "Network Manager found, set ${VWIFI_IFACE} as unmanaged device... "
