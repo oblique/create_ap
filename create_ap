@@ -38,6 +38,7 @@ usage() {
     echo "  --ieee80211n        Enable IEEE 802.11n (HT)"
     echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
     echo "  --country <code>    Set two-letter country code for regularity (example: US)"
+    echo "  --freq-band <GHz>   Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
     echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt           Do not create virtual interface"
     echo "  --fix-unmanaged     If NetworkManager shows your interface as unmanaged after you"
@@ -150,17 +151,21 @@ can_be_ap() {
 
 can_transmit_to_channel() {
     IFACE=$1
-    CHANNEL=$2
+    CHANNEL_NUM=$2
 
     if [[ $USE_IWCONFIG -eq 0 ]]; then
-        CHANNEL_INFO=$(get_adapter_info ${IFACE} | grep "MHz \[${CHANNEL}\]")
+        if [[ $FREQ_BAND == 2.4 ]]; then
+            CHANNEL_INFO=$(get_adapter_info ${IFACE} | grep " 24[0-9][0-9] MHz \[${CHANNEL_NUM}\]")
+        else
+            CHANNEL_INFO=$(get_adapter_info ${IFACE} | grep " \(49[0-9][0-9]\|5[0-9]\{3\}\) MHz \[${CHANNEL_NUM}\]")
+        fi
         [[ -z "${CHANNEL_INFO}" ]] && return 1
         [[ "${CHANNEL_INFO}" == *no\ IR* ]] && return 1
         [[ "${CHANNEL_INFO}" == *disabled* ]] && return 1
         return 0
     else
-        CHANNEL=$(printf '%02d' ${CHANNEL})
-        CHANNEL_INFO=$(iwlist ${IFACE} channel | grep "Channel ${CHANNEL} :")
+        CHANNEL_NUM=$(printf '%02d' ${CHANNEL_NUM})
+        CHANNEL_INFO=$(iwlist ${IFACE} channel | grep "Channel ${CHANNEL_NUM} :")
         [[ -z "${CHANNEL_INFO}" ]] && return 1
         return 0
     fi
@@ -182,6 +187,10 @@ ieee80211_frequency_to_channel() {
     else
         echo 0
     fi
+}
+
+is_5ghz_frequency() {
+    [[ $1 =~ ^(49[0-9]{2})|(5[0-9]{3})$ ]]
 }
 
 is_wifi_connected() {
@@ -372,7 +381,7 @@ networkmanager_wait_until_unmanaged() {
 }
 
 
-CHANNEL=1
+CHANNEL=default
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
@@ -384,6 +393,7 @@ DRIVER=nl80211
 NO_VIRT=0
 FIX_UNMANAGED=0
 COUNTRY=
+FREQ_BAND=2.4
 
 CONFDIR=
 WIFI_IFACE=
@@ -487,7 +497,7 @@ clean_exit() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -556,6 +566,11 @@ while :; do
             COUNTRY="$1"
             shift
             ;;
+        --freq-band)
+            shift
+            FREQ_BAND="$1"
+            shift
+            ;;
         --)
             shift
             break
@@ -576,6 +591,24 @@ fi
 if [[ $FIX_UNMANAGED -eq 1 ]]; then
     networkmanager_fix_unmanaged
     exit 0
+fi
+
+if [[ $FREQ_BAND != 2.4 && $FREQ_BAND != 5 ]]; then
+    echo "ERROR: Invalid frequency band" >&2
+    exit 1
+fi
+
+if [[ $CHANNEL == default ]]; then
+    if [[ $FREQ_BAND == 2.4 ]]; then
+        CHANNEL=1
+    else
+        CHANNEL=36
+    fi
+fi
+
+if [[ $FREQ_BAND != 5 && $CHANNEL -gt 14 ]]; then
+    echo "Channel number is greater than 14, assuming 5GHz frequency band"
+    FREQ_BAND=5
 fi
 
 WIFI_IFACE=$1
@@ -721,6 +754,11 @@ if [[ $NO_VIRT -eq 0 ]]; then
         WIFI_IFACE_FREQ=$(iw dev ${WIFI_IFACE} link | grep -i freq | awk '{print $2}')
         WIFI_IFACE_CHANNEL=$(ieee80211_frequency_to_channel ${WIFI_IFACE_FREQ})
         echo -n "${WIFI_IFACE} is already associated with channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
+        if is_5ghz_frequency $WIFI_IFACE_FREQ; then
+            FREQ_BAND=5
+        else
+            FREQ_BAND=2.4
+        fi
         if [[ $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
             echo ", fallback to channel ${WIFI_IFACE_CHANNEL}"
             CHANNEL=$WIFI_IFACE_CHANNEL
@@ -748,7 +786,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
     WIFI_IFACE=${VWIFI_IFACE}
 fi
 
-can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}."
+can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
 
 if networkmanager_is_running && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
     echo -n "Network Manager found, set ${WIFI_IFACE} as unmanaged device... "
@@ -764,7 +802,6 @@ cat << EOF > $CONFDIR/hostapd.conf
 ssid=${SSID}
 interface=${WIFI_IFACE}
 driver=${DRIVER}
-hw_mode=g
 channel=${CHANNEL}
 ctrl_interface=$CONFDIR/hostapd_ctrl
 ctrl_interface_group=0
@@ -774,6 +811,12 @@ EOF
 if [[ -n $COUNTRY ]]; then
     [[ $USE_IWCONFIG -eq 0 ]] && iw reg set $COUNTRY
     echo "country_code=${COUNTRY}" >> $CONFDIR/hostapd.conf
+fi
+
+if [[ $FREQ_BAND == 2.4 ]]; then
+    echo "hw_mode=g" >> $CONFDIR/hostapd.conf
+else
+    echo "hw_mode=a" >> $CONFDIR/hostapd.conf
 fi
 
 if [[ $IEEE80211N -eq 1 ]]; then
