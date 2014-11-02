@@ -37,6 +37,7 @@ usage() {
     echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
     echo "  --ieee80211n        Enable IEEE 802.11n (HT)"
     echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
+    echo "  --country <code>    Set two-letter country code for regularity (example: US)"
     echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt           Do not create virtual interface"
     echo "  --fix-unmanaged     If NetworkManager shows your interface as unmanaged after you"
@@ -382,6 +383,7 @@ HT_CAPAB='[HT40+]'
 DRIVER=nl80211
 NO_VIRT=0
 FIX_UNMANAGED=0
+COUNTRY=
 
 CONFDIR=
 WIFI_IFACE=
@@ -485,7 +487,7 @@ clean_exit() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -548,6 +550,11 @@ while :; do
         --fix-unmanaged)
             shift
             FIX_UNMANAGED=1
+            ;;
+        --country)
+            shift
+            COUNTRY="$1"
+            shift
             ;;
         --)
             shift
@@ -759,11 +766,15 @@ interface=${WIFI_IFACE}
 driver=${DRIVER}
 hw_mode=g
 channel=${CHANNEL}
-
 ctrl_interface=$CONFDIR/hostapd_ctrl
 ctrl_interface_group=0
 ignore_broadcast_ssid=$HIDDEN
 EOF
+
+if [[ -n $COUNTRY ]]; then
+    [[ $USE_IWCONFIG -eq 0 ]] && iw reg set $COUNTRY
+    echo "country_code=${COUNTRY}" >> $CONFDIR/hostapd.conf
+fi
 
 if [[ $IEEE80211N -eq 1 ]]; then
     cat << EOF >> $CONFDIR/hostapd.conf
