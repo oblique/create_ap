@@ -44,6 +44,7 @@ usage() {
     echo "  --fix-unmanaged     If NetworkManager shows your interface as unmanaged after you"
     echo "                      close create_ap, then use this option to switch your interface"
     echo "                      back to managed"
+    echo "  --mac <MAC>         Set MAC address"
     echo
     echo "Non-Bridging Options:"
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
@@ -200,6 +201,17 @@ is_wifi_connected() {
         iwconfig "$1" 2>&1 | grep -E 'Access Point: [0-9a-fA-F]{2}:' > /dev/null 2>&1 && return 0
     fi
     return 1
+}
+
+is_macaddr() {
+    echo "$1" | grep -E "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$" > /dev/null 2>&1
+}
+
+is_unicast_macaddr() {
+    is_macaddr "$1" || return 1
+    x=$(echo "$1" | cut -d: -f1)
+    x=$(printf '%d' "0x${x}")
+    [[ $(expr $x % 2) -eq 0 ]]
 }
 
 get_macaddr() {
@@ -394,6 +406,7 @@ NO_VIRT=0
 FIX_UNMANAGED=0
 COUNTRY=
 FREQ_BAND=2.4
+NEW_MACADDR=
 
 CONFDIR=
 WIFI_IFACE=
@@ -479,7 +492,10 @@ cleanup() {
     else
         ip link set down dev ${WIFI_IFACE}
         ip addr flush ${WIFI_IFACE}
-        networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE}
+        if [[ -n "$NEW_MACADDR" ]]; then
+            ip link set dev ${WIFI_IFACE} address ${OLD_MACADDR}
+        fi
+        networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE} ${OLD_MACADDR}
     fi
 }
 
@@ -497,7 +513,7 @@ clean_exit() {
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -571,6 +587,11 @@ while :; do
             FREQ_BAND="$1"
             shift
             ;;
+        --mac)
+            shift
+            NEW_MACADDR="$1"
+            shift
+            ;;
         --)
             shift
             break
@@ -638,6 +659,22 @@ if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD"
     echo
     usage >&2
     exit 1
+fi
+
+if [[ -n "$NEW_MACADDR" ]]; then
+    if ! is_macaddr "$NEW_MACADDR"; then
+        echo "ERROR: '${NEW_MACADDR}' is not a valid MAC address" >&2
+        exit 1
+    fi
+
+    if ! is_unicast_macaddr "$NEW_MACADDR"; then
+        echo "ERROR: The first byte of MAC address (${NEW_MACADDR}) must be even" >&2
+        exit 1
+    fi
+
+    if [[ $(get_all_macaddrs | grep -c ${NEW_MACADDR}) -ne 0 ]]; then
+        echo "WARN: MAC address '${NEW_MACADDR}' already exists. Because of this, you may encounter some problems" >&2
+    fi
 fi
 
 if [[ "$SHARE_METHOD" != "none" ]]; then
@@ -780,10 +817,12 @@ if [[ $NO_VIRT -eq 0 ]]; then
         die "$VIRTDIEMSG"
     fi
     OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
-    if [[ $(get_all_macaddrs | grep -c ${OLD_MACADDR}) -ne 1 ]]; then
+    if [[ -z "$NEW_MACADDR" && $(get_all_macaddrs | grep -c ${OLD_MACADDR}) -ne 1 ]]; then
         NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
     fi
     WIFI_IFACE=${VWIFI_IFACE}
+else
+    OLD_MACADDR=$(get_macaddr ${WIFI_IFACE})
 fi
 
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
@@ -863,8 +902,14 @@ fi
 if [[ $NO_VIRT -eq 0 && -n "$NEW_MACADDR" ]]; then
     ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die "$VIRTDIEMSG"
 fi
+
 ip link set down dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
 ip addr flush ${WIFI_IFACE} || die "$VIRTDIEMSG"
+
+if [[ $NO_VIRT -eq 1 && -n "$NEW_MACADDR" ]]; then
+    ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die
+fi
+
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     ip link set up dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
