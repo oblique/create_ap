@@ -429,7 +429,11 @@ cleanup() {
     for x in $CONFDIR/*.pid; do
         # even if the $CONFDIR is empty, the for loop will assign
         # a value in $x. so we need to check if the value is a file
-        [[ -f $x ]] && kill -9 $(cat $x)
+        if [[ -f $x ]]; then
+            PID=$(cat $x)
+            disown $PID > /dev/null 2>&1
+            kill -9 $PID > /dev/null 2>&1
+        fi
     done
     rm -rf $CONFDIR
 
@@ -773,6 +777,8 @@ fi
 
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
+echo "PID: $$"
+echo $$ > $CONFDIR/pid
 
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=$(get_virt_iface_name)
@@ -1011,7 +1017,11 @@ echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 # from now on we exit with 0 on SIGINT
 trap "clean_exit" SIGINT
 
-if ! hostapd $CONFDIR/hostapd.conf; then
+hostapd $CONFDIR/hostapd.conf &
+HOSTAPD_PID=$!
+echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
+
+if ! wait $HOSTAPD_PID; then
     echo -e "\nError: Failed to run hostapd, maybe a program is interfering." >&2
     if networkmanager_is_running; then
         echo "If an error like 'n80211: Could not configure driver mode' was thrown" >&2
