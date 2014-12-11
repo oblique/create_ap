@@ -45,6 +45,10 @@ usage() {
     echo "                      close create_ap, then use this option to switch your interface"
     echo "                      back to managed"
     echo "  --mac <MAC>         Set MAC address"
+    echo "  --stop <id>         Send stop command to an already running create_ap. For an <id>"
+    echo "                      you can put the PID of create_ap or the WiFi interface. You can"
+    echo "                      get them with --list"
+    echo "  --list              Show the create_ap processes that are already running"
     echo
     echo "Non-Bridging Options:"
     echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
@@ -67,6 +71,7 @@ usage() {
     echo "  $(basename $0) -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  $(basename $0) -m bridge wlan0 br0 MyAccessPoint MyPassPhrase"
     echo "  $(basename $0) --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  $(basename $0) --stop wlan0"
 }
 
 # it takes 2 arguments
@@ -407,6 +412,8 @@ FIX_UNMANAGED=0
 COUNTRY=
 FREQ_BAND=2.4
 NEW_MACADDR=
+LIST_RUNNING=0
+STOP_ID=
 
 CONFDIR=
 WIFI_IFACE=
@@ -514,10 +521,38 @@ clean_exit() {
     exit 0
 }
 
+list_running() {
+    for x in /tmp/create_ap.*; do
+        if [[ -f $x/pid ]]; then
+            PID=$(cat $x/pid)
+            if [[ -d /proc/$PID ]]; then
+                IFACE=${x#*.}
+                IFACE=${IFACE%%.*}
+                echo $PID $IFACE
+            fi
+        fi
+    done
+}
+
+is_running_pid() {
+    list_running | grep -E "^${1} " > /dev/null 2>&1
+}
+
+send_stop() {
+    if is_running_pid $1; then
+        kill -INT $1
+        return
+    fi
+
+    for x in /tmp/create_ap.$1.conf.*; do
+        [[ -f $x/pid ]] && kill -INT $(cat $x/pid)
+    done
+}
+
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
 
-ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:" -n $(basename $0) -- "$@")
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","stop:","list" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$ARGS"
 
@@ -596,6 +631,15 @@ while :; do
             NEW_MACADDR="$1"
             shift
             ;;
+        --stop)
+            shift
+            STOP_ID="$1"
+            shift
+            ;;
+        --list)
+            shift
+            LIST_RUNNING=1
+            ;;
         --)
             shift
             break
@@ -603,7 +647,7 @@ while :; do
     esac
 done
 
-if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0 ]]; then
+if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 ]]; then
     usage >&2
     exit 1
 fi
@@ -611,6 +655,16 @@ fi
 if [[ $(id -u) -ne 0 ]]; then
     echo "You must run it as root." >&2
     exit 1
+fi
+
+if [[ -n "$STOP_ID" ]]; then
+    send_stop "$STOP_ID"
+    exit 0
+fi
+
+if [[ $LIST_RUNNING -eq 1 ]]; then
+    list_running
+    exit 0
 fi
 
 if [[ $FIX_UNMANAGED -eq 1 ]]; then
