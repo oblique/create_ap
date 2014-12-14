@@ -428,6 +428,7 @@ ROUTE_ADDRS=
 
 cleanup() {
     trap "" SIGINT
+    trap "" SIGUSR1
 
     echo
     echo "Doing cleanup..."
@@ -539,18 +540,21 @@ is_running_pid() {
 }
 
 send_stop() {
+    # send stop signal to specific pid
     if is_running_pid $1; then
-        kill -INT $1
+        kill -USR1 $1
         return
     fi
 
-    for x in /tmp/create_ap.$1.conf.*; do
-        [[ -f $x/pid ]] && kill -INT $(cat $x/pid)
+    # send stop signal to specific interface
+    for x in $(list_running | grep -E " ${1}\$" | cut -f1 -d' '); do
+        kill -USR1 $x
     done
 }
 
 # if the user press ctrl+c then execute die()
 trap "die" SIGINT
+trap "die" SIGUSR1
 
 ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","stop:","list" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
@@ -1070,6 +1074,7 @@ echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 
 # from now on we exit with 0 on SIGINT
 trap "clean_exit" SIGINT
+trap "clean_exit" SIGUSR1
 
 hostapd $CONFDIR/hostapd.conf &
 HOSTAPD_PID=$!
