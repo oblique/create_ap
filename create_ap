@@ -1118,3 +1118,8 @@ if ! wait $HOSTAPD_PID; then
 fi
 
 clean_exit
+
+# Local Variables:
+# tab-width: 4
+# indent-tabs-mode: nil
+# End:
