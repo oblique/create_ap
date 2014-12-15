@@ -558,8 +558,8 @@ send_stop() {
 }
 
 # if the user press ctrl+c then execute die()
-trap "die" SIGINT
-trap "die" SIGUSR1
+trap "clean_exit" SIGINT
+trap "clean_exit" SIGUSR1
 
 ARGS=( "$@" )
 GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list" -n $(basename $0) -- "$@")
@@ -693,7 +693,7 @@ if [[ $DAEMONIZE -eq 1 ]]; then
         [[ "$x" != "--daemon" ]] && NEW_ARGS+=( "$x" )
     done
 
-    # fork()/setsid()/fork()
+    # run a detached create_ap
     setsid "$0" "${NEW_ARGS[@]}" &
     exit 0
 fi
