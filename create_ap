@@ -142,6 +142,11 @@ get_adapter_info() {
     iw phy $PHY info
 }
 
+get_adapter_kernel_module() {
+    MODULE=$(readlink -f "/sys/class/net/$1/device/driver/module")
+    echo ${MODULE##*/}
+}
+
 can_be_sta_and_ap() {
     # iwconfig does not provide this information, assume false
     [[ $USE_IWCONFIG -eq 1 ]] && return 1
@@ -735,6 +740,18 @@ if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     elif [[ $NO_VIRT -eq 0 ]]; then
         echo "WARN: Your adapter does not fully support AP virtual interface, enabling --no-virt" >&2
         NO_VIRT=1
+    fi
+fi
+
+if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^(8192[cd][ue]|8723a[sue])$ ]]; then
+    if ! strings $(which hostapd) | grep -m1 rtl871xdrv > /dev/null 2>&1; then
+        echo "ERROR: You need to patch your hostapd with rtl871xdrv patches." >&2
+        exit 1
+    fi
+
+    if [[ $DRIVER != "rtl871xdrv" ]]; then
+        echo "WARN: Your adapter needs rtl871xdrv, enabling --driver=rtl871xdrv" >&2
+        DRIVER=rtl871xdrv
     fi
 fi
 
