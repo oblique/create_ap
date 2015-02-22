@@ -857,7 +857,9 @@ if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 6
 fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
-    OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
+    if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+        OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
+    fi
 
     if is_bridge_interface $INTERNET_IFACE; then
         BRIDGE_IFACE=$INTERNET_IFACE
@@ -1030,7 +1032,9 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         # disable iptables rules for bridged interfaces
-        echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables || die
+        if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+            echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
+        fi
 
         # to initialize the bridge interface correctly we need to do the following:
         #
