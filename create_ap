@@ -434,12 +434,9 @@ OLD_MACADDR=
 IP_ADDRS=
 ROUTE_ADDRS=
 
-cleanup() {
+_cleanup() {
     trap "" SIGINT
     trap "" SIGUSR1
-
-    echo
-    echo -n "Doing cleanup.. "
 
     # exiting
     for x in $CONFDIR/*.pid; do
@@ -447,17 +444,17 @@ cleanup() {
         # a value in $x. so we need to check if the value is a file
         if [[ -f $x ]]; then
             PID=$(cat $x)
-            disown $PID > /dev/null 2>&1
-            kill -9 $PID > /dev/null 2>&1
+            disown $PID
+            kill -9 $PID
         fi
     done
     rm -rf $CONFDIR
 
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE > /dev/null 2>&1
-            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT > /dev/null 2>&1
-            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT > /dev/null 2>&1
+            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
             [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             if [[ -n $OLD_BRIDGE_IPTABLES ]]; then
@@ -497,9 +494,9 @@ cleanup() {
     fi
 
     if [[ "$SHARE_METHOD" != "bridge" ]]; then
-        iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT > /dev/null 2>&1
-        iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT > /dev/null 2>&1
-        iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT > /dev/null 2>&1
+        iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
+        iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT
+        iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -517,7 +514,12 @@ cleanup() {
         fi
         networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE} ${OLD_MACADDR}
     fi
+}
 
+cleanup() {
+    echo
+    echo -n "Doing cleanup.. "
+    _cleanup > /dev/null 2>&1
     echo "done"
 }
 
