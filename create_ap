@@ -455,9 +455,9 @@ _cleanup() {
             iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
             iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
-            [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+            [[ -n "$OLD_IP_FORWARD" ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-            if [[ -n $OLD_BRIDGE_IPTABLES ]]; then
+            if [[ -n "$OLD_BRIDGE_IPTABLES" ]]; then
                 echo $OLD_BRIDGE_IPTABLES > /proc/sys/net/bridge/bridge-nf-call-iptables
             fi
 
@@ -500,7 +500,7 @@ _cleanup() {
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
-        if [[ -n $VWIFI_IFACE ]]; then
+        if [[ -n "$VWIFI_IFACE" ]]; then
             ip link set down dev ${VWIFI_IFACE}
             ip addr flush ${VWIFI_IFACE}
             networkmanager_rm_unmanaged_if_needed ${VWIFI_IFACE} ${OLD_MACADDR}
