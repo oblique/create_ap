@@ -23,9 +23,6 @@
 * dnsmasq
 * iptables
 
-### For 'Bridged' Internet sharing method
-* bridge-utils
-
 
 ## Installation
 ### Generic

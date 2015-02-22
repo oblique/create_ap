@@ -13,9 +13,6 @@
 #    dnsmasq
 #    iptables
 
-# dependencies for 'bridge' Internet sharing method
-#    bridge-utils
-
 
 # make sure that all command outputs are in english
 # so we can parse them correctly
@@ -115,7 +112,8 @@ is_wifi_interface() {
 }
 
 is_bridge_interface() {
-    brctl show | cut -f1 | grep -E "^$1\$" > /dev/null 2>&1
+    [[ -z "$1" ]] && return 1
+    [[ -d "/sys/class/net/${1}/bridge" ]]
 }
 
 get_phy_device() {
@@ -462,8 +460,11 @@ _cleanup() {
             fi
 
             if ! is_bridge_interface $INTERNET_IFACE; then
-                ip link set down $BRIDGE_IFACE
-                brctl delbr $BRIDGE_IFACE
+                ip link set dev $BRIDGE_IFACE down
+                ip link set dev $INTERNET_IFACE down
+                ip link set dev $INTERNET_IFACE promisc off
+                ip link set dev $INTERNET_IFACE nomaster
+                ip link delete $BRIDGE_IFACE type bridge
                 ip addr flush $INTERNET_IFACE
                 ip link set dev $INTERNET_IFACE up
 
@@ -479,11 +480,13 @@ _cleanup() {
                 ip route flush dev $INTERNET_IFACE
 
                 for x in "${ROUTE_ADDRS[@]}"; do
+                    [[ -z "$x" ]] && continue
                     [[ "$x" == default* ]] && continue
                     ip route add $x dev $INTERNET_IFACE
                 done
 
                 for x in "${ROUTE_ADDRS[@]}"; do
+                    [[ -z "$x" ]] && continue
                     [[ "$x" != default* ]] && continue
                     ip route add $x dev $INTERNET_IFACE
                 done
@@ -1040,7 +1043,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         #
         # 1) save the IPs and route table of INTERNET_IFACE
         # 2) if NetworkManager is running set INTERNET_IFACE as unmanaged
-        # 3) create BRIDGE_IFACE and add INTERNET_IFACE to it
+        # 3) create BRIDGE_IFACE and attach INTERNET_IFACE to it
         # 4) set the previously saved IPs and route table to BRIDGE_IFACE
         #
         # we need the above because BRIDGE_IFACE is the master interface from now on
@@ -1060,11 +1063,16 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
                 networkmanager_wait_until_unmanaged $INTERNET_IFACE
             fi
 
-            brctl addbr $BRIDGE_IFACE || die
-            brctl setfd $BRIDGE_IFACE 0
-            brctl addif $BRIDGE_IFACE $INTERNET_IFACE || die
+            # create bridge interface
+            ip link add name $BRIDGE_IFACE type bridge || die
             ip link set dev $BRIDGE_IFACE up || die
+            # set 0ms forward delay
+            echo 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
+
+            # attach internet interface to bridge interface
+            ip link set dev $INTERNET_IFACE promisc on || die
             ip link set dev $INTERNET_IFACE up || die
+            ip link set dev $INTERNET_IFACE master $BRIDGE_IFACE || die
 
             ip addr flush $INTERNET_IFACE
             for x in "${IP_ADDRS[@]}"; do
