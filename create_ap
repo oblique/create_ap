@@ -594,6 +594,7 @@ while :; do
         -w)
             shift
             WPA_VERSION="$1"
+            [[ "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=1+2
             shift
             ;;
         -g)
@@ -859,6 +860,14 @@ if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 6
     exit 1
 fi
 
+if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^rtl[0-9].*$ ]]; then
+    if [[ -n "$PASSPHRASE" ]]; then
+        echo "WARN: Realtek drivers usually have problems with WPA1, enabling -w 2" >&2
+        WPA_VERSION=2
+    fi
+    echo "WARN: If AP doesn't work, please read: howto/realtek.md" >&2
+fi
+
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
         OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
@@ -978,7 +987,7 @@ EOF
 fi
 
 if [[ -n "$PASSPHRASE" ]]; then
-    [[ "$WPA_VERSION" == "1+2" || "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=3
+    [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
     cat << EOF >> $CONFDIR/hostapd.conf
 wpa=${WPA_VERSION}
 wpa_passphrase=$PASSPHRASE
