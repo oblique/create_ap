@@ -13,6 +13,7 @@
 #    dnsmasq
 #    iptables
 
+VERSION=0.1
 
 # make sure that all command outputs are in english
 # so we can parse them correctly
@@ -23,6 +24,7 @@ usage() {
     echo
     echo "Options:"
     echo "  -h, --help          Show this help"
+    echo "  --version           Print version number"
     echo "  -c <channel>        Channel number (default: 1)"
     echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
     echo "  -n                  Disable Internet sharing (if you use this, don't pass"
@@ -572,7 +574,7 @@ trap "clean_exit" SIGINT
 trap "clean_exit" SIGUSR1
 
 ARGS=( "$@" )
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list" -n $(basename $0) -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version" -n $(basename $0) -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -581,6 +583,10 @@ while :; do
         -h|--help)
             usage >&2
             exit 1
+            ;;
+        --version)
+            echo $VERSION
+            exit 0
             ;;
         --hidden)
             shift
