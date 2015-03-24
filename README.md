@@ -13,6 +13,7 @@
 ### General
 * bash (to run this script)
 * util-linux (for getopt)
+* procps or procps-ng
 * hostapd
 * iproute2
 * iw
