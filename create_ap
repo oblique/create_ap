@@ -612,7 +612,7 @@ eval set -- "$GETOPT_ARGS"
 while :; do
     case "$1" in
         -h|--help)
-            usage >&2
+            usage
             exit 1
             ;;
         --version)
