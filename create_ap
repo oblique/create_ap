@@ -1083,6 +1083,9 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
         iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
+        # to enable clients to establish PPTP connections we must
+        # load nf_nat_pptp module
+        modprobe nf_nat_pptp > /dev/null 2>&1
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         # disable iptables rules for bridged interfaces
         if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
