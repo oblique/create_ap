@@ -483,7 +483,7 @@ _cleanup() {
 
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE
             iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
             [[ -n "$OLD_IP_FORWARD" ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
@@ -1079,7 +1079,7 @@ fi
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE || die
+        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
         iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
         iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
