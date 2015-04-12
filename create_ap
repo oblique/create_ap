@@ -15,13 +15,14 @@
 #    iptables
 
 VERSION=0.1
+PROGNAME="$(basename $0)"
 
 # make sure that all command outputs are in english
 # so we can parse them correctly
 export LC_ALL=C
 
 usage() {
-    echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
+    echo "Usage: "$PROGNAME" [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
     echo
     echo "Options:"
     echo "  -h, --help          Show this help"
@@ -64,17 +65,17 @@ usage() {
     echo "    a bridge interface is created automatically."
     echo
     echo "Examples:"
-    echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) wlan0 eth0"
-    echo "  $(basename $0) wlan0 eth0 MyAccessPoint"
-    echo "  echo 'MyAccessPoint' | $(basename $0) wlan0 eth0"
-    echo "  $(basename $0) wlan0 wlan0 MyAccessPoint MyPassPhrase"
-    echo "  $(basename $0) -n wlan0 MyAccessPoint MyPassPhrase"
-    echo "  $(basename $0) -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  $(basename $0) -m bridge wlan0 br0 MyAccessPoint MyPassPhrase"
-    echo "  $(basename $0) --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  $(basename $0) --daemon wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  $(basename $0) --stop wlan0"
+    echo "  "$PROGNAME" wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | "$PROGNAME" wlan0 eth0"
+    echo "  "$PROGNAME" wlan0 eth0 MyAccessPoint"
+    echo "  echo 'MyAccessPoint' | "$PROGNAME" wlan0 eth0"
+    echo "  "$PROGNAME" wlan0 wlan0 MyAccessPoint MyPassPhrase"
+    echo "  "$PROGNAME" -n wlan0 MyAccessPoint MyPassPhrase"
+    echo "  "$PROGNAME" -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  "$PROGNAME" -m bridge wlan0 br0 MyAccessPoint MyPassPhrase"
+    echo "  "$PROGNAME" --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  "$PROGNAME" --daemon wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  "$PROGNAME" --stop wlan0"
 }
 
 # it takes 2 arguments
@@ -605,7 +606,7 @@ trap "clean_exit" SIGINT
 trap "clean_exit" SIGUSR1
 
 ARGS=( "$@" )
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged" -n $(basename $0) -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
