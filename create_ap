@@ -614,7 +614,7 @@ while :; do
     case "$1" in
         -h|--help)
             usage
-            exit 1
+            exit 0
             ;;
         --version)
             echo $VERSION
