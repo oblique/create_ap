@@ -1,0 +1,31 @@
+# 
+# Bash Completion routine for create_ap
+#
+
+_create_ap() {
+    awk_cmd='
+        ($1 ~ /^-/){
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /,$/) {
+                    print substr ($i, 0, length ($i)-1)
+                }
+                else {
+                    print $i
+                    break
+                }
+            }
+        }
+    '
+
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts=$("$1" --help | awk "$awk_cmd")
+
+    COMPREPLY=( $(compgen -W "${opts}" -- $cur) )
+    return 0
+}
+complete -F _create_ap create_ap
+
+# vim: set ft=sh:
