@@ -3,8 +3,8 @@
 #
 
 _create_ap() {
-    awk_cmd='
-        ($1 ~ /^-/){
+    local awk_cmd='
+        ($1 ~ /^-/) {
             for (i = 1; i <= NF; i++) {
                 if ($i ~ /,$/) {
                     print substr ($i, 0, length ($i)-1)
@@ -19,11 +19,136 @@ _create_ap() {
 
     local cur prev opts
     COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    cur="$2"
+    prev="$3"
     opts=$("$1" --help | awk "$awk_cmd")
 
-    COMPREPLY=( $(compgen -W "${opts}" -- $cur) )
+    case "$prev" in
+        -h|--help)
+            # No Options
+            ;;
+        --version)
+            # No Options
+            ;;
+        -c)
+            # Channels 1-14 are valid only for 2.4GHz
+            # For 5GHz the channels are specfic to each country, so
+            # no point in try to autocomplete for it.
+            # Refer http://en.wikipedia.org/wiki/List_of_WLAN_channels
+            opts=$(for chan in {1..14}; do echo $chan; done)
+            ;;
+        -w)
+            opts="1 2 1+2"
+            ;;
+        -n)
+            # No Options
+            ;;
+        -m)
+            opts="nat bridge none"
+            ;;
+        --hidden)
+            # No Options
+            ;;
+        --ieee80211)
+            # No Options
+            ;;
+        --ht_capab)
+            # Refer http://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf
+            opts='
+                [LDPC] [HT40-] [HT40+] [SMPS-STATIC] [SMPS-DYNAMIC]
+                [GF] [SHORT-GI-20] [SHORT-GI-40] [TX-STBC]
+                [RX-STBC1] [RX-STBC12] [RX-STBC123] [DELAYED-BA]
+                [MAX-AMSDU-7935] [DSSS_CCK-40] [40-INTOLERANT]
+                [LSIG-TXOP-PROT]
+            '
+            ;;
+        --country)
+            local reg_file=/usr/lib/crda/regulatory.bin
+            if command -v regdbdump > /dev/null && [[ -f "$reg_file" ]]; then
+                local country_awk_cmd='
+                    ($1 ~ /^country/) {
+                        print substr ($2, 0, length ($2)-1)
+                    }
+                '
+                opts=$(regdbdump "$reg_file" 2>/dev/null | awk "$country_awk_cmd")
+            else
+                opts='
+                    AD AE AF AI AL AM AN AR AS AT AU AW AZ BA BB BD BE
+                    BF BG BH BL BM BN BO BR BS BT BY BZ CA CF CH CI CL
+                    CN CO CR CX CY CZ DE DK DM DO DZ EC EE EG ES ET FI
+                    FM FR GB GD GE GF GH GL GP GR GT GU GY HK HN HR HT
+                    HU ID IE IL IN IR IS IT JM JO JP KE KH KN KP KR KW
+                    KY KZ LB LC LI LK LS LT LU LV MA MC MD ME MF MH MK
+                    MN MO MP MQ MR MT MU MW MX MY NG NI NL NO NP NZ OM
+                    PA PE PF PG PH PK PL PM PR PT PW PY QA RE RO RS RU
+                    RW SA SE SG SI SK SN SR SV SY TC TD TG TH TN TR TT
+                    TW TZ UA UG US UY UZ VC VE VI VN VU WF WS YE YT ZA
+                    ZW
+                '
+            fi
+            ;;
+        --freq-band)
+            opts="2.4 5"
+            ;;
+        --driver)
+            # Refer http://w1.fi/cgit/hostap/tree/src/drivers
+            # Not going to implement
+            ;;
+        --no-virt)
+            # No Options
+            ;;
+        --no-haveged)
+            # No Options
+            ;;
+        --fix-unmanaged)
+            # No Options
+            ;;
+        --mac)
+            # Not going to implement
+            ;;
+        --daemon)
+            # No Options
+            ;;
+        --stop)
+            # Two instance of create_ap are invoked for every run;
+            # One the child of the other
+            # Get the child ids using the above knowledge
+            local cpids=$(
+                for pid in $(pgrep create_ap); do
+                    pgrep -P $pid create_ap
+                done
+            )
+            # Given the child ids, get the parent ids
+            local ppids=$(
+                for cpid in $cpids; do
+                    ps -p $cpid -o ppid=
+                done
+            )
+            #Get Wireless adapter name
+            local stop_awk_cmd='
+                ($1 ~ /^Interface/) {
+                    print $2
+                }
+            '
+            local iface=$(iw dev | awk "$stop_awk_cmd")
+            if [[ ! -z "$iface" || ! -z "$ppids" ]]; then
+                opts="$iface $ppids"
+            fi
+            ;;
+        --list)
+            # No Options
+            ;;
+        -p)
+            # Not going to implement
+            ;;
+        -d)
+            # No Options
+            ;;
+        *)
+            ;;
+    esac
+
+    COMPREPLY=( $(compgen -W "$opts" -- $cur) )
     return 0
 }
 complete -F _create_ap create_ap

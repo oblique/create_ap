@@ -4,4 +4,5 @@ all:
 install:
 	cp create_ap /usr/bin/create_ap
 	[ ! -d /lib/systemd/system ] || cp create_ap.service /lib/systemd/system
-	[ ! -d /usr/share/bash-completion/completions ] || cp bash_completion /usr/share/bash-completion/completions/create_ap
+	mkdir -p /usr/share/bash-completion/completions
+	cp bash_completion /usr/share/bash-completion/completions/create_ap
