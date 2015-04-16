@@ -21,6 +21,10 @@ PROGNAME="$(basename $0)"
 # so we can parse them correctly
 export LC_ALL=C
 
+# all new files and directories must be readable only by root.
+# in special cases we must use chmod to give any other permissions.
+umask 0077
+
 usage() {
     echo "Usage: "$PROGNAME" [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
     echo
@@ -719,6 +723,11 @@ if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 
     exit 1
 fi
 
+if [[ $LIST_RUNNING -eq 1 ]]; then
+    list_running
+    exit 0
+fi
+
 if [[ $(id -u) -ne 0 ]]; then
     echo "You must run it as root." >&2
     exit 1
@@ -726,11 +735,6 @@ fi
 
 if [[ -n "$STOP_ID" ]]; then
     send_stop "$STOP_ID"
-    exit 0
-fi
-
-if [[ $LIST_RUNNING -eq 1 ]]; then
-    list_running
     exit 0
 fi
 
@@ -934,6 +938,11 @@ CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 echo "PID: $$"
 echo $$ > $CONFDIR/pid
+
+# to make --list work from any user, we must give read
+# permitions to $CONFDIR and $CONFDIR/pid
+chmod 755 $CONFDIR
+chmod 444 $CONFDIR/pid
 
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=$(get_virt_iface_name)
