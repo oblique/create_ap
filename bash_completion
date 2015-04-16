@@ -31,11 +31,12 @@ _create_ap() {
             # No Options
             ;;
         -c)
-            # Channels 1-14 are valid only for 2.4GHz
-            # For 5GHz the channels are specfic to each country, so
-            # no point in try to autocomplete for it.
             # Refer http://en.wikipedia.org/wiki/List_of_WLAN_channels
-            opts=$(for chan in {1..14}; do echo $chan; done)
+            opts=$(
+                iw list | grep ' MHz \[[[:digit:]]\+\] ' |
+                grep -v 'no IR\|disabled' |
+                sed 's/.*\[\(.*\)\].*/\1/' | sort -n | uniq
+            )
             ;;
         -w)
             opts="1 2 1+2"
@@ -49,7 +50,7 @@ _create_ap() {
         --hidden)
             # No Options
             ;;
-        --ieee80211)
+        --ieee80211n)
             # No Options
             ;;
         --ht_capab)
@@ -83,7 +84,7 @@ _create_ap() {
                     PA PE PF PG PH PK PL PM PR PT PW PY QA RE RO RS RU
                     RW SA SE SG SI SK SN SR SV SY TC TD TG TH TN TR TT
                     TW TZ UA UG US UY UZ VC VE VI VN VU WF WS YE YT ZA
-                    ZW
+                    ZW 00
                 '
             fi
             ;;
@@ -110,35 +111,12 @@ _create_ap() {
             # No Options
             ;;
         --stop)
-            # Two instance of create_ap are invoked for every run;
-            # One the child of the other
-            # Get the child ids using the above knowledge
-            local cpids=$(
-                for pid in $(pgrep create_ap); do
-                    pgrep -P $pid create_ap
-                done
-            )
-            # Given the child ids, get the parent ids
-            local ppids=$(
-                for cpid in $cpids; do
-                    ps -p $cpid -o ppid=
-                done
-            )
-            #Get Wireless adapter name
-            local stop_awk_cmd='
-                ($1 ~ /^Interface/) {
-                    print $2
-                }
-            '
-            local iface=$(iw dev | awk "$stop_awk_cmd")
-            if [[ ! -z "$iface" || ! -z "$ppids" ]]; then
-                opts="$iface $ppids"
-            fi
+            opts=$("$1" --list)
             ;;
         --list)
             # No Options
             ;;
-        -p)
+        -g)
             # Not going to implement
             ;;
         -d)
