@@ -88,6 +88,7 @@ usage() {
 #  1 if v1 is less than v2
 #  2 if v1 is greater than v2
 version_cmp() {
+    local V1 V2 VN x
     [[ ! $1 =~ ^[0-9]+(\.[0-9]+)*$ ]] && die "Wrong version format!"
     [[ ! $2 =~ ^[0-9]+(\.[0-9]+)*$ ]] && die "Wrong version format!"
 
@@ -126,6 +127,7 @@ is_bridge_interface() {
 }
 
 get_phy_device() {
+    local x
     for x in /sys/class/ieee80211/*; do
         [[ ! -e "$x" ]] && continue
         if [[ "${x##*/}" = "$1" ]]; then
@@ -144,12 +146,14 @@ get_phy_device() {
 }
 
 get_adapter_info() {
+    local PHY
     PHY=$(get_phy_device "$1")
     [[ $? -ne 0 ]] && return 1
     iw phy $PHY info
 }
 
 get_adapter_kernel_module() {
+    local MODULE
     MODULE=$(readlink -f "/sys/class/net/$1/device/driver/module")
     echo ${MODULE##*/}
 }
@@ -170,6 +174,7 @@ can_be_ap() {
 }
 
 can_transmit_to_channel() {
+    local IFACE CHANNEL_NUM CHANNEL_INFO
     IFACE=$1
     CHANNEL_NUM=$2
 
@@ -193,7 +198,7 @@ can_transmit_to_channel() {
 
 # taken from iw/util.c
 ieee80211_frequency_to_channel() {
-    FREQ=$1
+    local FREQ=$1
     if [[ $FREQ -eq 2484 ]]; then
         echo 14
     elif [[ $FREQ -lt 2484 ]]; then
@@ -227,6 +232,7 @@ is_macaddr() {
 }
 
 is_unicast_macaddr() {
+    local x
     is_macaddr "$1" || return 1
     x=$(echo "$1" | cut -d: -f1)
     x=$(printf '%d' "0x${x}")
@@ -239,7 +245,7 @@ get_macaddr() {
 }
 
 get_avail_bridge() {
-    i=0
+    local i=0
     while :; do
         if ! is_interface br${i}; then
             echo br${i}
@@ -250,7 +256,7 @@ get_avail_bridge() {
 }
 
 get_virt_iface_name() {
-    i=0
+    local i=0
     while :; do
         if ! is_interface ap${i}; then
             echo ap${i}
@@ -265,6 +271,7 @@ get_all_macaddrs() {
 }
 
 get_new_macaddr() {
+    local OLDMAC NEWMAC LAST_BYTE i
     OLDMAC=$(get_macaddr "$1")
     LAST_BYTE=$(printf %d 0x${OLDMAC##*:})
     for i in {1..255}; do
@@ -276,13 +283,13 @@ get_new_macaddr() {
 
 # start haveged when needed
 haveged_watchdog() {
-    local show_warn=0
+    local show_warn=1
     while :; do
         if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
             if ! which haveged > /dev/null 2>&1; then
-                if [[ $show_warn -eq 0 ]]; then
+                if [[ $show_warn -eq 1 ]]; then
                     echo "WARN: Low entropy detected. We recommend you to install \`haveged'"
-                    show_warn=1
+                    show_warn=0
                 fi
             elif ! pidof haveged > /dev/null 2>&1; then
                 echo "Low entropy detected, starting haveged"
@@ -301,6 +308,7 @@ NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 NM_OLDER_VERSION=1
 
 networkmanager_exists() {
+    local NM_VER
     which nmcli > /dev/null 2>&1 || return 1
     NM_VER=$(nmcli -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
     version_cmp $NM_VER 0.9.9
@@ -313,6 +321,7 @@ networkmanager_exists() {
 }
 
 networkmanager_is_running() {
+    local NMCLI_OUT
     networkmanager_exists || return 1
     if [[ $NM_OLDER_VERSION -eq 1 ]]; then
         NMCLI_OUT=$(nmcli -t -f RUNNING nm)
@@ -330,6 +339,7 @@ networkmanager_iface_is_unmanaged() {
 ADDED_UNMANAGED=
 
 networkmanager_add_unmanaged() {
+    local MAC UNMANAGED WAS_EMPTY x
     networkmanager_exists || return 1
 
     [[ -d ${NETWORKMANAGER_CONF%/*} ]] || mkdir -p ${NETWORKMANAGER_CONF%/*}
@@ -378,6 +388,7 @@ networkmanager_add_unmanaged() {
 }
 
 networkmanager_rm_unmanaged() {
+    local MAC UNMANAGED
     networkmanager_exists || return 1
     [[ ! -f ${NETWORKMANAGER_CONF} ]] && return 1
 
@@ -421,6 +432,7 @@ networkmanager_rm_unmanaged_if_needed() {
 }
 
 networkmanager_wait_until_unmanaged() {
+    local RES
     networkmanager_is_running || return 1
     while :; do
         networkmanager_iface_is_unmanaged "$1"
@@ -468,6 +480,8 @@ ROUTE_ADDRS=
 HAVEGED_WATCHDOG_PID=
 
 _cleanup() {
+    local PID x
+
     trap "" SIGINT
     trap "" SIGUSR1
 
@@ -576,6 +590,7 @@ clean_exit() {
 }
 
 list_running() {
+    local PID IFACE x
     for x in /tmp/create_ap.*; do
         if [[ -f $x/pid ]]; then
             PID=$(cat $x/pid)
@@ -593,6 +608,8 @@ is_running_pid() {
 }
 
 send_stop() {
+    local x
+
     # send stop signal to specific pid
     if is_running_pid $1; then
         kill -USR1 $1
