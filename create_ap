@@ -23,7 +23,8 @@ export LC_ALL=C
 
 # all new files and directories must be readable only by root.
 # in special cases we must use chmod to give any other permissions.
-umask 0077
+SCRIPT_UMASK=0077
+umask $SCRIPT_UMASK
 
 usage() {
     echo "Usage: "$PROGNAME" [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
@@ -80,6 +81,78 @@ usage() {
     echo "  "$PROGNAME" --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  "$PROGNAME" --daemon wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  "$PROGNAME" --stop wlan0"
+}
+
+# allocate lock for the caller bash thread
+alloc_lock() {
+    # lock file for creating mutex
+    local LOCK_FILE=/tmp/create_ap.lock
+    local LOCK_FD=LOCK_FD_$BASHPID
+
+    # if lock FD is already allocated just return
+    eval "[[ \$$LOCK_FD -ne 0 ]]" && return 0
+
+    # use the lowest unused FD. avoid FD 0 because we use it to
+    # indicate that LOCK_FD_$BASHPID is not set.
+    for x in $(seq 1 $(ulimit -n)); do
+        if [[ ! -a "/proc/$BASHPID/fd/$x" ]]; then
+            eval "$LOCK_FD=$x"
+
+            # open/create lock file with write access for all users
+            # otherwise normal users will not be able to use it.
+            # to avoid race conditions on creation, we need to
+            # use umask to set the permissions.
+            umask 0555
+            eval "eval \"exec \$$LOCK_FD>$LOCK_FILE\"" > /dev/null 2>&1 || return 1
+            umask $SCRIPT_UMASK
+
+            # there is a case where lock file was created from a normal
+            # user. change the owner to root as soon as we can.
+            [[ $(id -u) -eq 0 ]] && chown 0:0 $LOCK_FILE
+
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# recursive mutex lock for all create_ap processes/threads.
+#
+# WARNING: if you lock in a function that their caller need their
+# output (i.e. the caller use | or $()) then you can have dead-lock
+# if the caller took the lock before. this happens because bash creates
+# a new thread for the callie function.
+mutex_lock() {
+    local MUTEX_COUNTER=MUTEX_COUNTER_$BASHPID
+    local LOCK_FD=LOCK_FD_$BASHPID
+
+    # allocate lock FD if needed
+    if eval "[[ \$$LOCK_FD -eq 0 ]]"; then
+        alloc_lock || die "Failed to allocate lock"
+    fi
+
+    # lock if needed and increase the counter
+    eval "[[ \$$MUTEX_COUNTER -eq 0 ]]" && eval "flock \$$LOCK_FD"
+    eval "$MUTEX_COUNTER=\$(( \$$MUTEX_COUNTER + 1 ))"
+
+    return 0
+}
+
+# recursive mutex unlock for all create_ap processes/threads
+mutex_unlock() {
+    local MUTEX_COUNTER=MUTEX_COUNTER_$BASHPID
+    local LOCK_FD=LOCK_FD_$BASHPID
+
+    # if lock FD was not allocated or we didn't lock before
+    # then just return
+    eval "[[ \$$LOCK_FD -eq 0 || \$$MUTEX_COUNTER -eq 0 ]]" && return 0
+
+    # unlock if needed and decrease the counter
+    eval "$MUTEX_COUNTER=\$(( \$$MUTEX_COUNTER - 1 ))"
+    eval "[[ \$$MUTEX_COUNTER -eq 0 ]]" && eval "flock -u \$$LOCK_FD"
+
+    return 0
 }
 
 # it takes 2 arguments
@@ -246,24 +319,30 @@ get_macaddr() {
 
 get_avail_bridge() {
     local i=0
+    mutex_lock
     while :; do
         if ! is_interface br${i}; then
+            mutex_unlock
             echo br${i}
             return
         fi
         i=$((i + 1))
     done
+    mutex_unlock
 }
 
 get_virt_iface_name() {
     local i=0
+    mutex_lock
     while :; do
         if ! is_interface ap${i}; then
+            mutex_unlock
             echo ap${i}
             return
         fi
         i=$((i+1))
     done
+    mutex_unlock
 }
 
 get_all_macaddrs() {
@@ -274,10 +353,12 @@ get_new_macaddr() {
     local OLDMAC NEWMAC LAST_BYTE i
     OLDMAC=$(get_macaddr "$1")
     LAST_BYTE=$(printf %d 0x${OLDMAC##*:})
+    mutex_lock
     for i in {1..255}; do
         NEWMAC="${OLDMAC%:*}:$(printf %02x $(( ($LAST_BYTE + $i) % 256 )))"
         (get_all_macaddrs | grep "$NEWMAC" > /dev/null 2>&1) || break
     done
+    mutex_unlock
     echo $NEWMAC
 }
 
@@ -285,6 +366,7 @@ get_new_macaddr() {
 haveged_watchdog() {
     local show_warn=1
     while :; do
+        mutex_lock
         if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
             if ! which haveged > /dev/null 2>&1; then
                 if [[ $show_warn -eq 1 ]]; then
@@ -297,9 +379,11 @@ haveged_watchdog() {
                 haveged -w 1024 -F > /dev/null 2>&1 &
                 local haveged_pid=$!
                 echo $haveged_pid > $CONFDIR/haveged.pid
+                mutex_unlock
                 wait $haveged_pid
             fi
         fi
+        mutex_unlock
         sleep 2
     done
 }
@@ -354,14 +438,20 @@ networkmanager_add_unmanaged() {
         [[ -z "$MAC" ]] && return 1
     fi
 
+    mutex_lock
     UNMANAGED=$(grep -m1 -Eo '^unmanaged-devices=[[:alnum:]:;,-]*' /etc/NetworkManager/NetworkManager.conf)
+
     WAS_EMPTY=0
     [[ -z "$UNMANAGED" ]] && WAS_EMPTY=1
     UNMANAGED=$(echo "$UNMANAGED" | sed 's/unmanaged-devices=//' | tr ';,' ' ')
 
+    # if it exists, do nothing
     for x in $UNMANAGED; do
-        [[ $x == "mac:${MAC}" ]] && return 2
-        [[ $NM_OLDER_VERSION -eq 0 && $x == "interface-name:${1}" ]] && return 2
+        if [[ $x == "mac:${MAC}" ]] ||
+               [[ $NM_OLDER_VERSION -eq 0 && $x == "interface-name:${1}" ]]; then
+            mutex_unlock
+            return 2
+        fi
     done
 
     if [[ $NM_OLDER_VERSION -eq 1 ]]; then
@@ -383,6 +473,7 @@ networkmanager_add_unmanaged() {
     fi
 
     ADDED_UNMANAGED="${ADDED_UNMANAGED} ${1} "
+    mutex_unlock
 
     return 0
 }
@@ -401,9 +492,13 @@ networkmanager_rm_unmanaged() {
         [[ -z "$MAC" ]] && return 1
     fi
 
+    mutex_lock
     UNMANAGED=$(grep -m1 -Eo '^unmanaged-devices=[[:alnum:]:;,-]*' /etc/NetworkManager/NetworkManager.conf | sed 's/unmanaged-devices=//' | tr ';,' ' ')
 
-    [[ -z "$UNMANAGED" ]] && return 1
+    if [[ -z "$UNMANAGED" ]]; then
+        mutex_unlock
+        return 1
+    fi
 
     [[ -n "$MAC" ]] && UNMANAGED=$(echo $UNMANAGED | sed -e "s/mac:${MAC}\( \|$\)//g")
     UNMANAGED=$(echo $UNMANAGED | sed -e "s/interface-name:${1}\( \|$\)//g")
@@ -418,13 +513,16 @@ networkmanager_rm_unmanaged() {
     fi
 
     ADDED_UNMANAGED="${ADDED_UNMANAGED/ ${1} /}"
+    mutex_unlock
 
     return 0
 }
 
 networkmanager_fix_unmanaged() {
     [[ -f ${NETWORKMANAGER_CONF} ]] || return
+    mutex_lock
     sed -e "/^unmanaged-devices=.*/d" -i ${NETWORKMANAGER_CONF}
+    mutex_unlock
 }
 
 networkmanager_rm_unmanaged_if_needed() {
@@ -482,8 +580,9 @@ HAVEGED_WATCHDOG_PID=
 _cleanup() {
     local PID x
 
-    trap "" SIGINT
-    trap "" SIGUSR1
+    mutex_lock
+
+    trap "" SIGINT SIGUSR1 SIGUSR2
 
     # kill haveged_watchdog
     [[ -n "$HAVEGED_WATCHDOG_PID" ]] && kill $HAVEGED_WATCHDOG_PID
@@ -569,6 +668,8 @@ _cleanup() {
         fi
         networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE} ${OLD_MACADDR}
     fi
+
+    mutex_unlock
 }
 
 cleanup() {
@@ -580,15 +681,33 @@ cleanup() {
 
 die() {
     [[ -n "$1" ]] && echo -e "\nERROR: $1\n" >&2
-    cleanup
-    exit 1
+    # we cleanup and exit only if we are the main thread
+    if [[ $$ -eq $BASHPID ]]; then
+       cleanup
+       exit 1
+    else
+        # send die signal to the main thread
+        kill -USR2 $$
+        # terminate our thread
+        kill -9 $BASHPID
+    fi
 }
 
 clean_exit() {
-    cleanup
-    exit 0
+    # we cleanup and exit only if we are the main thread
+    if [[ $$ -eq $BASHPID ]]; then
+       cleanup
+       exit 0
+    else
+        # send clean_exit signal to the main thread
+        kill -USR1 $$
+        # terminate our thread
+        kill -9 $BASHPID
+    fi
 }
 
+# WARNING: never call mutex_lock in this function, otherwise we
+# will have dead-lock when send_stop is called
 list_running() {
     local PID IFACE x
     for x in /tmp/create_ap.*; do
@@ -610,9 +729,11 @@ is_running_pid() {
 send_stop() {
     local x
 
+    mutex_lock
     # send stop signal to specific pid
     if is_running_pid $1; then
         kill -USR1 $1
+        mutex_unlock
         return
     fi
 
@@ -620,11 +741,8 @@ send_stop() {
     for x in $(list_running | grep -E " ${1}\$" | cut -f1 -d' '); do
         kill -USR1 $x
     done
+    mutex_unlock
 }
-
-# if the user press ctrl+c then execute die()
-trap "clean_exit" SIGINT
-trap "clean_exit" SIGUSR1
 
 ARGS=( "$@" )
 GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged" -n "$PROGNAME" -- "$@")
@@ -740,8 +858,22 @@ if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 
     exit 1
 fi
 
+# allocate lock for the main thread to avoid any failures later
+if ! alloc_lock; then
+    echo "ERROR: Failed to allocate lock" >&2
+    exit 1
+fi
+
+# if the user press ctrl+c or we get USR1 signal
+# then run clean_exit()
+trap "clean_exit" SIGINT SIGUSR1
+# if we get USR2 signal then run die().
+trap "die" SIGUSR2
+
 if [[ $LIST_RUNNING -eq 1 ]]; then
+    mutex_lock
     list_running
+    mutex_unlock
     exit 0
 fi
 
@@ -951,6 +1083,7 @@ if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
     exit 1
 fi
 
+mutex_lock
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 echo "PID: $$"
@@ -960,6 +1093,7 @@ echo $$ > $CONFDIR/pid
 # permitions to $CONFDIR and $CONFDIR/pid
 chmod 755 $CONFDIR
 chmod 444 $CONFDIR/pid
+mutex_unlock
 
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=$(get_virt_iface_name)
@@ -1197,10 +1331,6 @@ fi
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
-
-# from now on we exit with 0 on SIGINT
-trap "clean_exit" SIGINT
-trap "clean_exit" SIGUSR1
 
 if [[ $NO_HAVEGED -eq 0 ]]; then
     haveged_watchdog &
