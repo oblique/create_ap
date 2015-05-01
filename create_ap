@@ -598,8 +598,6 @@ WIFI_IFACE=
 VWIFI_IFACE=
 INTERNET_IFACE=
 BRIDGE_IFACE=
-OLD_IP_FORWARD=
-OLD_BRIDGE_IPTABLES=
 OLD_MACADDR=
 IP_ADDRS=
 ROUTE_ADDRS=
@@ -628,17 +626,28 @@ _cleanup() {
     done
     rm -rf $CONFDIR
 
+    # if we are the last create_ap instance then set back the common values
+    if ! has_running_instance; then
+        # set old ip_forward
+        if [[ -f $COMMON_CONFDIR/ip_forward ]]; then
+            cp $COMMON_CONFDIR/ip_forward /proc/sys/net/ipv4
+            rm -f $COMMON_CONFDIR/ip_forward
+        fi
+        # set old bridge-nf-call-iptables
+        if [[ -f $COMMON_CONFDIR/bridge-nf-call-iptables ]]; then
+            if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+                cp $COMMON_CONFDIR/bridge-nf-call-iptables /proc/sys/net/bridge
+            fi
+            rm -f $COMMON_CONFDIR/bridge-nf-call-iptables
+        fi
+    fi
+
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
             iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE
             iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
-            [[ -n "$OLD_IP_FORWARD" ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-            if [[ -n "$OLD_BRIDGE_IPTABLES" ]]; then
-                echo $OLD_BRIDGE_IPTABLES > /proc/sys/net/bridge/bridge-nf-call-iptables
-            fi
-
             if ! is_bridge_interface $INTERNET_IFACE; then
                 ip link set dev $BRIDGE_IFACE down
                 ip link set dev $INTERNET_IFACE down
@@ -738,6 +747,24 @@ list_running() {
         fi
     done
     mutex_unlock
+}
+
+has_running_instance() {
+    local PID x
+
+    mutex_lock
+    for x in /tmp/create_ap.*; do
+        if [[ -f $x/pid ]]; then
+            PID=$(cat $x/pid)
+            if [[ -d /proc/$PID ]]; then
+                mutex_unlock
+                return 0
+            fi
+        fi
+    done
+    mutex_lock
+
+    return 1
 }
 
 is_running_pid() {
@@ -1081,17 +1108,11 @@ if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^rtl[0-9].*$ ]]; then
 fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
-    if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
-        OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
-    fi
-
     if is_bridge_interface $INTERNET_IFACE; then
         BRIDGE_IFACE=$INTERNET_IFACE
     else
         BRIDGE_IFACE=$(get_avail_bridge)
     fi
-elif [[ "$SHARE_METHOD" == "nat" ]]; then
-    OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
 fi
 
 if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
@@ -1111,6 +1132,18 @@ echo $$ > $CONFDIR/pid
 # permitions to $CONFDIR and $CONFDIR/pid
 chmod 755 $CONFDIR
 chmod 444 $CONFDIR/pid
+
+COMMON_CONFDIR=/tmp/create_ap.common.conf
+mkdir -p $COMMON_CONFDIR
+
+if [[ ! -f $COMMON_CONFDIR/ip_forward ]]; then
+    cp /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
+fi
+
+if [[ ! -f $COMMON_CONFDIR/bridge-nf-call-iptables ]] &&
+       [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+    cp /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
+fi
 mutex_unlock
 
 if [[ $NO_VIRT -eq 0 ]]; then
