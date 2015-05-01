@@ -399,11 +399,7 @@ haveged_watchdog() {
             elif ! pidof haveged > /dev/null 2>&1; then
                 echo "Low entropy detected, starting haveged"
                 # boost low-entropy
-                haveged -w 1024 -F > /dev/null 2>&1 &
-                local haveged_pid=$!
-                echo $haveged_pid > $CONFDIR/haveged.pid
-                mutex_unlock
-                wait $haveged_pid
+                haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid
             fi
         fi
         mutex_unlock
@@ -601,32 +597,35 @@ HAVEGED_WATCHDOG_PID=
 _cleanup() {
     local PID x
 
-    mutex_lock
-
     trap "" SIGINT SIGUSR1 SIGUSR2 EXIT
+    mutex_lock
+    disown -a
 
     # kill haveged_watchdog
     [[ -n "$HAVEGED_WATCHDOG_PID" ]] && kill $HAVEGED_WATCHDOG_PID
 
-    # exiting
+    # kill processes
     for x in $CONFDIR/*.pid; do
         # even if the $CONFDIR is empty, the for loop will assign
         # a value in $x. so we need to check if the value is a file
-        if [[ -f $x ]]; then
-            PID=$(cat $x)
-            disown $PID
-            kill -9 $PID
-        fi
+        [[ -f $x ]] && kill -9 $(cat $x)
     done
+
     rm -rf $CONFDIR
 
     # if we are the last create_ap instance then set back the common values
     if ! has_running_instance; then
+        # kill common processes
+        for x in $COMMON_CONFDIR/*.pid; do
+            [[ -f $x ]] && kill -9 $(cat $x)
+        done
+
         # set old ip_forward
         if [[ -f $COMMON_CONFDIR/ip_forward ]]; then
             cp $COMMON_CONFDIR/ip_forward /proc/sys/net/ipv4
             rm -f $COMMON_CONFDIR/ip_forward
         fi
+
         # set old bridge-nf-call-iptables
         if [[ -f $COMMON_CONFDIR/bridge-nf-call-iptables ]]; then
             if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
@@ -634,6 +633,8 @@ _cleanup() {
             fi
             rm -f $COMMON_CONFDIR/bridge-nf-call-iptables
         fi
+
+        rm -rf $COMMON_CONFDIR
     fi
 
     if [[ "$SHARE_METHOD" != "none" ]]; then
