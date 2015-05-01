@@ -613,6 +613,20 @@ _cleanup() {
 
     rm -rf $CONFDIR
 
+    local found=0
+    for x in $(list_running_conf); do
+        if [[ -f $x/nat_internet_iface && $(cat $x/nat_internet_iface) == $INTERNET_IFACE ]]; then
+            found=1
+            break
+        fi
+    done
+
+    if [[ $found -eq 0 ]]; then
+        cp -f $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding \
+           /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding
+        rm -f $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding
+    fi
+
     # if we are the last create_ap instance then set back the common values
     if ! has_running_instance; then
         # kill common processes
@@ -730,18 +744,24 @@ clean_exit() {
     exit 0
 }
 
-list_running() {
-    local PID IFACE x
+list_running_conf() {
+    local x
     mutex_lock
     for x in /tmp/create_ap.*; do
-        if [[ -f $x/pid ]]; then
-            PID=$(cat $x/pid)
-            if [[ -d /proc/$PID ]]; then
-                IFACE=${x#*.}
-                IFACE=${IFACE%%.*}
-                echo $PID $IFACE
-            fi
+        if [[ -f $x/pid && -d /proc/$(cat $x/pid) ]]; then
+            echo $x
         fi
+    done
+    mutex_unlock
+}
+
+list_running() {
+    local IFACE x
+    mutex_lock
+    for x in $(list_running_conf); do
+        IFACE=${x#*.}
+        IFACE=${IFACE%%.*}
+        echo $(cat $x/pid) $IFACE
     done
     mutex_unlock
 }
@@ -1133,6 +1153,11 @@ chmod 444 $CONFDIR/pid
 COMMON_CONFDIR=/tmp/create_ap.common.conf
 mkdir -p $COMMON_CONFDIR
 
+if [[ "$SHARE_METHOD" == "nat" ]]; then
+    echo $INTERNET_IFACE > $CONFDIR/nat_internet_iface
+    cp -n /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding \
+       $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding
+fi
 cp -n /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
 if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
     cp -n /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
@@ -1287,6 +1312,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
         iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
         iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         # to enable clients to establish PPTP connections we must
         # load nf_nat_pptp module
