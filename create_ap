@@ -83,75 +83,104 @@ usage() {
     echo "  "$PROGNAME" --stop wlan0"
 }
 
-# allocate lock for the caller bash thread
-alloc_lock() {
-    # lock file for creating mutex
-    local LOCK_FILE=/tmp/create_ap.lock
-    local LOCK_FD=LOCK_FD_$BASHPID
-
-    # if lock FD is already allocated just return
-    eval "[[ \$$LOCK_FD -ne 0 ]]" && return 0
-
-    # use the lowest unused FD. avoid FD 0 because we use it to
-    # indicate that LOCK_FD_$BASHPID is not set.
+# on success it echos a non-zero unused FD
+# on error it echos 0
+get_avail_fd() {
+    local x
     for x in $(seq 1 $(ulimit -n)); do
         if [[ ! -a "/proc/$BASHPID/fd/$x" ]]; then
-            eval "$LOCK_FD=$x"
-
-            # open/create lock file with write access for all users
-            # otherwise normal users will not be able to use it.
-            # to avoid race conditions on creation, we need to
-            # use umask to set the permissions.
-            umask 0555
-            eval "eval \"exec \$$LOCK_FD>$LOCK_FILE\"" > /dev/null 2>&1 || return 1
-            umask $SCRIPT_UMASK
-
-            # there is a case where lock file was created from a normal
-            # user. change the owner to root as soon as we can.
-            [[ $(id -u) -eq 0 ]] && chown 0:0 $LOCK_FILE
-
-            return 0
+            echo $x
+            return
         fi
     done
-
-    return 1
+    echo 0
 }
 
-# recursive mutex lock for all create_ap processes/threads.
-#
-# WARNING: if you lock in a function that their caller need their
-# output (i.e. the caller use | or $()) then you can have dead-lock
-# if the caller took the lock before. this happens because bash creates
-# a new thread for the callie function.
-mutex_lock() {
-    local MUTEX_COUNTER=MUTEX_COUNTER_$BASHPID
-    local LOCK_FD=LOCK_FD_$BASHPID
+# lock file for the mutex counter
+COUNTER_LOCK_FILE=/tmp/create_ap.$$.lock
 
-    # allocate lock FD if needed
-    if eval "[[ \$$LOCK_FD -eq 0 ]]"; then
-        alloc_lock || die "Failed to allocate lock"
+cleanup_lock() {
+    rm -f $COUNTER_LOCK_FILE
+}
+
+init_lock() {
+    local LOCK_FILE=/tmp/create_ap.all.lock
+
+    # we initialize only once
+    [[ $LOCK_FD -ne 0 ]] && return 0
+
+    LOCK_FD=$(get_avail_fd)
+    [[ $LOCK_FD -eq 0 ]] && return 1
+
+    # open/create lock file with write access for all users
+    # otherwise normal users will not be able to use it.
+    # to avoid race conditions on creation, we need to
+    # use umask to set the permissions.
+    umask 0555
+    eval "exec $LOCK_FD>$LOCK_FILE" > /dev/null 2>&1 || return 1
+    umask $SCRIPT_UMASK
+
+    # there is a case where lock file was created from a normal
+    # user. change the owner to root as soon as we can.
+    [[ $(id -u) -eq 0 ]] && chown 0:0 $LOCK_FILE
+
+    # create mutex counter lock file
+    echo 0 > $COUNTER_LOCK_FILE
+
+    return $?
+}
+
+# recursive mutex lock for all create_ap processes
+mutex_lock() {
+    local counter_mutex_fd
+    local counter
+
+    # lock local mutex and read counter
+    counter_mutex_fd=$(get_avail_fd)
+    if [[ $counter_mutex_fd -ne 0 ]]; then
+        eval "exec $counter_mutex_fd<>$COUNTER_LOCK_FILE"
+        flock $counter_mutex_fd
+        read -u $counter_mutex_fd counter
+    else
+        echo "Failed to lock mutex counter" >&2
+        return 1
     fi
 
-    # lock if needed and increase the counter
-    eval "[[ \$$MUTEX_COUNTER -eq 0 ]]" && eval "flock \$$LOCK_FD"
-    eval "$MUTEX_COUNTER=\$(( \$$MUTEX_COUNTER + 1 ))"
+    # lock global mutex and increase counter
+    [[ $counter -eq 0 ]] && flock $LOCK_FD
+    counter=$(( $counter + 1 ))
 
+    # write counter and unlock local mutex
+    echo $counter > /proc/$BASHPID/fd/$counter_mutex_fd
+    eval "exec ${counter_mutex_fd}<&-"
     return 0
 }
 
-# recursive mutex unlock for all create_ap processes/threads
+# recursive mutex unlock for all create_ap processes
 mutex_unlock() {
-    local MUTEX_COUNTER=MUTEX_COUNTER_$BASHPID
-    local LOCK_FD=LOCK_FD_$BASHPID
+    local counter_mutex_fd
+    local counter
 
-    # if lock FD was not allocated or we didn't lock before
-    # then just return
-    eval "[[ \$$LOCK_FD -eq 0 || \$$MUTEX_COUNTER -eq 0 ]]" && return 0
+    # lock local mutex and read counter
+    counter_mutex_fd=$(get_avail_fd)
+    if [[ $counter_mutex_fd -ne 0 ]]; then
+        eval "exec $counter_mutex_fd<>$COUNTER_LOCK_FILE"
+        flock $counter_mutex_fd
+        read -u $counter_mutex_fd counter
+    else
+        echo "Failed to lock mutex counter" >&2
+        return 1
+    fi
 
-    # unlock if needed and decrease the counter
-    eval "$MUTEX_COUNTER=\$(( \$$MUTEX_COUNTER - 1 ))"
-    eval "[[ \$$MUTEX_COUNTER -eq 0 ]]" && eval "flock -u \$$LOCK_FD"
+    # decrease counter and unlock global mutex
+    if [[ $counter -gt 0 ]]; then
+        counter=$(( $counter - 1 ))
+        [[ $counter -eq 0 ]] && flock -u $LOCK_FD
+    fi
 
+    # write counter and unlock local mutex
+    echo $counter > /proc/$BASHPID/fd/$counter_mutex_fd
+    eval "exec ${counter_mutex_fd}<&-"
     return 0
 }
 
@@ -582,7 +611,7 @@ _cleanup() {
 
     mutex_lock
 
-    trap "" SIGINT SIGUSR1 SIGUSR2
+    trap "" SIGINT SIGUSR1 SIGUSR2 EXIT
 
     # kill haveged_watchdog
     [[ -n "$HAVEGED_WATCHDOG_PID" ]] && kill $HAVEGED_WATCHDOG_PID
@@ -670,6 +699,7 @@ _cleanup() {
     fi
 
     mutex_unlock
+    cleanup_lock
 }
 
 cleanup() {
@@ -681,35 +711,22 @@ cleanup() {
 
 die() {
     [[ -n "$1" ]] && echo -e "\nERROR: $1\n" >&2
-    # we cleanup and exit only if we are the main thread
-    if [[ $$ -eq $BASHPID ]]; then
-       cleanup
-       exit 1
-    else
-        # send die signal to the main thread
-        kill -USR2 $$
-        # terminate our thread
-        kill -9 $BASHPID
-    fi
+    # send die signal to the main process
+    [[ $BASHPID -ne $$ ]] && kill -USR2 $$
+    # we don't need to call cleanup because it's traped on EXIT
+    exit 1
 }
 
 clean_exit() {
-    # we cleanup and exit only if we are the main thread
-    if [[ $$ -eq $BASHPID ]]; then
-       cleanup
-       exit 0
-    else
-        # send clean_exit signal to the main thread
-        kill -USR1 $$
-        # terminate our thread
-        kill -9 $BASHPID
-    fi
+    # send clean_exit signal to the main process
+    [[ $BASHPID -ne $$ ]] && kill -USR1 $$
+    # we don't need to call cleanup because it's traped on EXIT
+    exit 0
 }
 
-# WARNING: never call mutex_lock in this function, otherwise we
-# will have dead-lock when send_stop is called
 list_running() {
     local PID IFACE x
+    mutex_lock
     for x in /tmp/create_ap.*; do
         if [[ -f $x/pid ]]; then
             PID=$(cat $x/pid)
@@ -720,6 +737,7 @@ list_running() {
             fi
         fi
     done
+    mutex_unlock
 }
 
 is_running_pid() {
@@ -858,9 +876,10 @@ if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 
     exit 1
 fi
 
-# allocate lock for the main thread to avoid any failures later
-if ! alloc_lock; then
-    echo "ERROR: Failed to allocate lock" >&2
+trap "cleanup_lock" EXIT
+
+if ! init_lock; then
+    echo "ERROR: Failed to initialize lock" >&2
     exit 1
 fi
 
@@ -871,9 +890,7 @@ trap "clean_exit" SIGINT SIGUSR1
 trap "die" SIGUSR2
 
 if [[ $LIST_RUNNING -eq 1 ]]; then
-    mutex_lock
     list_running
-    mutex_unlock
     exit 0
 fi
 
@@ -1084,6 +1101,7 @@ if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
 fi
 
 mutex_lock
+trap "cleanup" EXIT
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
 echo "Config dir: $CONFDIR"
 echo "PID: $$"
