@@ -622,14 +622,14 @@ _cleanup() {
 
         # set old ip_forward
         if [[ -f $COMMON_CONFDIR/ip_forward ]]; then
-            cp $COMMON_CONFDIR/ip_forward /proc/sys/net/ipv4
+            cp -f $COMMON_CONFDIR/ip_forward /proc/sys/net/ipv4
             rm -f $COMMON_CONFDIR/ip_forward
         fi
 
         # set old bridge-nf-call-iptables
         if [[ -f $COMMON_CONFDIR/bridge-nf-call-iptables ]]; then
             if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
-                cp $COMMON_CONFDIR/bridge-nf-call-iptables /proc/sys/net/bridge
+                cp -f $COMMON_CONFDIR/bridge-nf-call-iptables /proc/sys/net/bridge
             fi
             rm -f $COMMON_CONFDIR/bridge-nf-call-iptables
         fi
@@ -1133,13 +1133,9 @@ chmod 444 $CONFDIR/pid
 COMMON_CONFDIR=/tmp/create_ap.common.conf
 mkdir -p $COMMON_CONFDIR
 
-if [[ ! -f $COMMON_CONFDIR/ip_forward ]]; then
-    cp /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
-fi
-
-if [[ ! -f $COMMON_CONFDIR/bridge-nf-call-iptables ]] &&
-       [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
-    cp /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
+cp -n /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
+if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
+    cp -n /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
 fi
 mutex_unlock
 
