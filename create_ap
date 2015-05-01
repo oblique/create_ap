@@ -346,13 +346,17 @@ get_macaddr() {
     cat "/sys/class/net/${1}/address"
 }
 
-get_avail_bridge() {
+alloc_new_iface() {
+    local prefix=$1
     local i=0
+
     mutex_lock
     while :; do
-        if ! is_interface br${i}; then
+        if ! is_interface $prefix$i && [[ ! -f $COMMON_CONFDIR/ifaces/$prefix$i ]]; then
+            mkdir -p $COMMON_CONFDIR/ifaces
+            touch $COMMON_CONFDIR/ifaces/$prefix$i
+            echo $prefix$i
             mutex_unlock
-            echo br${i}
             return
         fi
         i=$((i + 1))
@@ -360,18 +364,8 @@ get_avail_bridge() {
     mutex_unlock
 }
 
-get_virt_iface_name() {
-    local i=0
-    mutex_lock
-    while :; do
-        if ! is_interface ap${i}; then
-            mutex_unlock
-            echo ap${i}
-            return
-        fi
-        i=$((i+1))
-    done
-    mutex_unlock
+dealloc_iface() {
+    rm -f $COMMON_CONFDIR/ifaces/$1
 }
 
 get_all_macaddrs() {
@@ -656,6 +650,7 @@ _cleanup() {
                 ip link delete $BRIDGE_IFACE type bridge
                 ip addr flush $INTERNET_IFACE
                 ip link set dev $INTERNET_IFACE up
+                dealloc_iface $BRIDGE_IFACE
 
                 for x in "${IP_ADDRS[@]}"; do
                     x="${x/inet/}"
@@ -697,6 +692,7 @@ _cleanup() {
             ip addr flush ${VWIFI_IFACE}
             networkmanager_rm_unmanaged_if_needed ${VWIFI_IFACE} ${OLD_MACADDR}
             iw dev ${VWIFI_IFACE} del
+            dealloc_iface $VWIFI_IFACE
         fi
     else
         ip link set down dev ${WIFI_IFACE}
@@ -1111,7 +1107,7 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
     if is_bridge_interface $INTERNET_IFACE; then
         BRIDGE_IFACE=$INTERNET_IFACE
     else
-        BRIDGE_IFACE=$(get_avail_bridge)
+        BRIDGE_IFACE=$(alloc_new_iface br)
     fi
 fi
 
@@ -1147,7 +1143,7 @@ fi
 mutex_unlock
 
 if [[ $NO_VIRT -eq 0 ]]; then
-    VWIFI_IFACE=$(get_virt_iface_name)
+    VWIFI_IFACE=$(alloc_new_iface ap)
 
     # in NetworkManager 0.9.9 and above we can set the interface as unmanaged without
     # the need of MAC address, so we set it before we create the virtual interface.
