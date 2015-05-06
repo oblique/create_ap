@@ -111,7 +111,8 @@ _create_ap() {
             # No Options
             ;;
         --stop)
-            opts=$("$1" --list)
+            local stop_awk_cmd='$1 ~ /^[0-9]+$/'
+            opts=$("$1" --list | awk "$stop_awk_cmd")
             ;;
         --list)
             # No Options

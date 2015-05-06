@@ -47,7 +47,7 @@ usage() {
     echo "  --freq-band <GHz>   Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
     echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt           Do not create virtual interface"
-    echo "  --no-haveged        Do not run \`haveged' automatically when needed"
+    echo "  --no-haveged        Do not run 'haveged' automatically when needed"
     echo "  --fix-unmanaged     If NetworkManager shows your interface as unmanaged after you"
     echo "                      close create_ap, then use this option to switch your interface"
     echo "                      back to managed"
@@ -915,6 +915,7 @@ while :; do
     esac
 done
 
+# Check if required number of positional args are present
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 ]]; then
     usage >&2
     exit 1
@@ -934,6 +935,7 @@ trap "clean_exit" SIGINT SIGUSR1
 trap "die" SIGUSR2
 
 if [[ $LIST_RUNNING -eq 1 ]]; then
+    echo -e "List of running $PROGNAME instances:\n"
     list_running
     exit 0
 fi
@@ -944,11 +946,13 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 
 if [[ -n "$STOP_ID" ]]; then
+    echo "Trying to kill $PROGNAME instance associated with $STOP_ID..."
     send_stop "$STOP_ID"
     exit 0
 fi
 
 if [[ $FIX_UNMANAGED -eq 1 ]]; then
+    echo "Trying to fix unmanaged status in NetworkManager..."
     networkmanager_fix_unmanaged
     exit 0
 fi
@@ -959,6 +963,7 @@ if [[ $DAEMONIZE -eq 1 ]]; then
     for x in "${ARGS[@]}"; do
         [[ "$x" != "--daemon" ]] && NEW_ARGS+=( "$x" )
     done
+    echo "Running as Daemon..."
 
     # run a detached create_ap
     setsid "$0" "${NEW_ARGS[@]}" &
