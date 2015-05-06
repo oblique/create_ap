@@ -30,37 +30,38 @@ usage() {
     echo "Usage: "$PROGNAME" [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
     echo
     echo "Options:"
-    echo "  -h, --help          Show this help"
-    echo "  --version           Print version number"
-    echo "  -c <channel>        Channel number (default: 1)"
-    echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
-    echo "  -n                  Disable Internet sharing (if you use this, don't pass"
-    echo "                      the <interface-with-internet> argument)"
-    echo "  -m <method>         Method for Internet sharing."
-    echo "                      Use: 'nat' for NAT (default)"
-    echo "                           'bridge' for bridging"
-    echo "                           'none' for no Internet sharing (equivalent to -n)"
-    echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
-    echo "  --ieee80211n        Enable IEEE 802.11n (HT)"
-    echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
-    echo "  --country <code>    Set two-letter country code for regularity (example: US)"
-    echo "  --freq-band <GHz>   Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
-    echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
-    echo "  --no-virt           Do not create virtual interface"
-    echo "  --no-haveged        Do not run 'haveged' automatically when needed"
-    echo "  --fix-unmanaged     If NetworkManager shows your interface as unmanaged after you"
-    echo "                      close create_ap, then use this option to switch your interface"
-    echo "                      back to managed"
-    echo "  --mac <MAC>         Set MAC address"
-    echo "  --daemon            Run create_ap in the background"
-    echo "  --stop <id>         Send stop command to an already running create_ap. For an <id>"
-    echo "                      you can put the PID of create_ap or the WiFi interface. You can"
-    echo "                      get them with --list"
-    echo "  --list              Show the create_ap processes that are already running"
+    echo "  -h, --help              Show this help"
+    echo "  --version               Print version number"
+    echo "  -c <channel>            Channel number (default: 1)"
+    echo "  -w <WPA version>        Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
+    echo "  -n                      Disable Internet sharing (if you use this, don't pass"
+    echo "                          the <interface-with-internet> argument)"
+    echo "  -m <method>             Method for Internet sharing."
+    echo "                          Use: 'nat' for NAT (default)"
+    echo "                               'bridge' for bridging"
+    echo "                               'none' for no Internet sharing (equivalent to -n)"
+    echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
+    echo "  --ieee80211n            Enable IEEE 802.11n (HT)"
+    echo "  --ht_capab <HT>         HT capabilities (default: [HT40+])"
+    echo "  --country <code>        Set two-letter country code for regularity (example: US)"
+    echo "  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
+    echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
+    echo "  --no-virt               Do not create virtual interface"
+    echo "  --no-haveged            Do not run 'haveged' automatically when needed"
+    echo "  --fix-unmanaged         If NetworkManager shows your interface as unmanaged after you"
+    echo "                          close create_ap, then use this option to switch your interface"
+    echo "                          back to managed"
+    echo "  --mac <MAC>             Set MAC address"
+    echo "  --daemon                Run create_ap in the background"
+    echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
+    echo "                          you can put the PID of create_ap or the WiFi interface. You can"
+    echo "                          get them with --list"
+    echo "  --list                  Show the create_ap processes that are already running"
+    echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo
     echo "Non-Bridging Options:"
-    echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
-    echo "  -d                  DNS server will take into account /etc/hosts"
+    echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
+    echo "  -d                      DNS server will take into account /etc/hosts"
     echo
     echo "Useful informations:"
     echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
@@ -574,14 +575,21 @@ IEEE80211N=0
 HT_CAPAB='[HT40+]'
 DRIVER=nl80211
 NO_VIRT=0
-FIX_UNMANAGED=0
 COUNTRY=
 FREQ_BAND=2.4
 NEW_MACADDR=
 DAEMONIZE=0
+NO_HAVEGED=0
+
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOST HIDDEN SHARE_METHOD
+             IEEE80211N HT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
+             NEW_MACADDR DAEMONIZE NO_HAVEGED)
+
+FIX_UNMANAGED=0
 LIST_RUNNING=0
 STOP_ID=
-NO_HAVEGED=0
+
+STORE_CONFIG=
 
 CONFDIR=
 WIFI_IFACE=
@@ -806,8 +814,31 @@ send_stop() {
     mutex_unlock
 }
 
+# Storing configs
+write_config() {
+    local i=1
+
+    if ! eval 'echo -n > "$STORE_CONFIG"' > /dev/null 2>&1; then
+        echo "ERROR: Unable to create config file $STORE_CONFIG" >&2
+        exit 1
+    fi
+
+    for config_opt in "${CONFIG_OPTS[@]}"; do
+        eval echo $config_opt=\$$config_opt
+    done >> "$STORE_CONFIG"
+
+    while [[ $# -ne 0 ]]; do
+        echo "ARG$i=$1"
+        shift
+        ((i++))
+    done >> "$STORE_CONFIG"
+
+    echo -e "\nConfigs written to $STORE_CONFIG"
+    exit 0
+}
+
 ARGS=( "$@" )
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged","mkconfig:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -908,6 +939,11 @@ while :; do
             shift
             NO_HAVEGED=1
             ;;
+        --mkconfig)
+            shift
+            STORE_CONFIG="$1"
+            shift
+            ;;
         --)
             shift
             break
@@ -933,6 +969,8 @@ fi
 trap "clean_exit" SIGINT SIGUSR1
 # if we get USR2 signal then run die().
 trap "die" SIGUSR2
+
+[[ -n "$STORE_CONFIG" ]] && write_config "$@"
 
 if [[ $LIST_RUNNING -eq 1 ]]; then
     echo -e "List of running $PROGNAME instances:\n"
