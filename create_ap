@@ -58,6 +58,7 @@ usage() {
     echo "                          get them with --list"
     echo "  --list                  Show the create_ap processes that are already running"
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
+    echo "  --config <conf_file>    Load configs from conf_file"
     echo
     echo "Non-Bridging Options:"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
@@ -590,6 +591,9 @@ LIST_RUNNING=0
 STOP_ID=
 
 STORE_CONFIG=
+LOAD_CONFIG=
+
+declare -A LOADED_ARGS
 
 CONFDIR=
 WIFI_IFACE=
@@ -837,8 +841,61 @@ write_config() {
     exit 0
 }
 
+is_config_opt() {
+    local elem opt="$1"
+
+    for elem in "${CONFIG_OPTS[@]}"; do
+        if [[ "$elem" == "$opt" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Load options from config file
+read_config() {
+    local opt_name opt_val
+    local pos_max=0 pos_num=0 pos_idx
+
+    while read line; do
+        # Read switches and their values
+        opt_name="${line%=*}"
+        opt_val="${line#*=}"
+        if is_config_opt "$opt_name" ; then
+            eval $opt_name="\$opt_val"
+        elif [[ "$opt_name" =~ ^ARG([1-9][0-9]*)$ ]]; then
+            pos_idx="${BASH_REMATCH[1]}"
+            ((pos_num++))
+            [[ $pos_idx > $pos_max ]] && pos_max=$pos_idx
+            LOADED_ARGS[$pos_idx]="$opt_val"
+        else
+            echo "WARN: Unrecognized configuration entry $opt_name" >&2
+        fi
+    done < "$LOAD_CONFIG"
+
+    if [[ $pos_num -ne $pos_max ]]; then
+        echo "ERROR: Positional arguments cannot be skipped" >&2
+        exit 1
+    fi
+}
+
+
 ARGS=( "$@" )
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged","mkconfig:" -n "$PROGNAME" -- "$@")
+# Preprocessing for --config before option-parsing starts
+for ((i=0; i<$#; i++)); do
+    if [[ "${ARGS[i]}" = "--config" ]]; then
+        if [[ -f "${ARGS[i+1]}" ]]; then
+            LOAD_CONFIG="${ARGS[i+1]}"
+            read_config
+        else
+            echo "ERROR: No config file found at given location" >&2
+            exit 1
+        fi
+        break
+    fi
+done
+
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -944,12 +1001,25 @@ while :; do
             STORE_CONFIG="$1"
             shift
             ;;
+        --config)
+            shift
+            shift
+            ;;
         --)
             shift
             break
             ;;
     esac
 done
+
+# Load positional args from config file, if needed
+if [[ -n "$LOAD_CONFIG" ]]; then
+    for ((i=$# + 1; i<=${#LOADED_ARGS[@]}; i++)); do
+        ((j=i-1))
+        ((k=i+1))
+        set -- "${@:1:$j}" "${LOADED_ARGS[$i]}" "${@:$k}"
+    done
+fi
 
 # Check if required number of positional args are present
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 ]]; then
