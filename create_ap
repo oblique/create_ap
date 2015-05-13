@@ -40,6 +40,7 @@ usage() {
     echo "                      Use: 'nat' for NAT (default)"
     echo "                           'bridge' for bridging"
     echo "                           'none' for no Internet sharing (equivalent to -n)"
+    echo "  --psk               Use 64 hex digits pre-shared-key instead of passphrase"
     echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
     echo "  --ieee80211n        Enable IEEE 802.11n (HT)"
     echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
@@ -807,7 +808,7 @@ send_stop() {
 }
 
 ARGS=( "$@" )
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","psk","no-haveged" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -908,12 +909,18 @@ while :; do
             shift
             NO_HAVEGED=1
             ;;
+        --psk)
+            shift
+            WPA_MODE="psk"
+            ;;
         --)
             shift
             break
             ;;
     esac
 done
+
+WPA_MODE=${WPA_MODE:="passphrase"}
 
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 ]]; then
     usage >&2
@@ -1083,7 +1090,12 @@ else
         while :; do
             read -p "Passphrase: " -s PASSPHRASE
             echo
-            if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+            if [[ ${WPA_MODE} == "psk" ]]; then
+                if [[ ${#PASSPHRASE} -ne 64 ]]; then
+                    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
+                    continue
+                fi
+            elif [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
                 echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
                 continue
             fi
@@ -1111,8 +1123,15 @@ if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
     exit 1
 fi
 
-if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+if [[ ${WPA_MODE} == "passphrase" ]]; then
+    if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+        echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+        exit 1
+    fi
+fi
+
+if [[ ${WPA_MODE} == "psk" && ${#PASSPHRASE} -ne 64 ]]; then
+    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
     exit 1
 fi
 
@@ -1261,7 +1280,7 @@ if [[ -n "$PASSPHRASE" ]]; then
     [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
     cat << EOF >> $CONFDIR/hostapd.conf
 wpa=${WPA_VERSION}
-wpa_passphrase=$PASSPHRASE
+wpa_$WPA_MODE=$PASSPHRASE
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP
