@@ -1065,16 +1065,10 @@ if [[ $FIX_UNMANAGED -eq 1 ]]; then
     exit 0
 fi
 
-if [[ $DAEMONIZE -eq 1 ]]; then
-    # remove --daemon
-    NEW_ARGS=( )
-    for x in "${ARGS[@]}"; do
-        [[ "$x" != "--daemon" ]] && NEW_ARGS+=( "$x" )
-    done
+if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
     echo "Running as Daemon..."
-
     # run a detached create_ap
-    setsid "$0" "${NEW_ARGS[@]}" &
+    RUNNING_AS_DAEMON=1 setsid "$0" "${ARGS[@]}" &
     exit 0
 fi
 
