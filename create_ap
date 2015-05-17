@@ -1013,7 +1013,7 @@ while :; do
 done
 
 # Load positional args from config file, if needed
-if [[ -n "$LOAD_CONFIG" ]]; then
+if [[ -n "$LOAD_CONFIG" && $# -eq 0 ]]; then
     for ((i=$# + 1; i<=${#LOADED_ARGS[@]}; i++)); do
         ((j=i-1))
         ((k=i+1))
