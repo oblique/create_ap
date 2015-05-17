@@ -584,7 +584,8 @@ NO_HAVEGED=0
 
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS HIDDEN SHARE_METHOD
              IEEE80211N HT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
-             NEW_MACADDR DAEMONIZE NO_HAVEGED)
+             NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
+             SSID PASSPHRASE)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -592,8 +593,6 @@ STOP_ID=
 
 STORE_CONFIG=
 LOAD_CONFIG=
-
-declare -A LOADED_ARGS
 
 CONFDIR=
 WIFI_IFACE=
@@ -827,17 +826,21 @@ write_config() {
         exit 1
     fi
 
+    WIFI_IFACE=$1
+    if [[ "$SHARE_METHOD" == "none" ]]; then
+        SSID=$2
+        PASSPHRASE=$3
+    else
+        INTERNET_IFACE=$2
+        SSID=$3
+        PASSPHRASE=$4
+    fi
+
     for config_opt in "${CONFIG_OPTS[@]}"; do
         eval echo $config_opt=\$$config_opt
     done >> "$STORE_CONFIG"
 
-    while [[ $# -ne 0 ]]; do
-        echo "ARG$i=$1"
-        shift
-        ((i++))
-    done >> "$STORE_CONFIG"
-
-    echo -e "\nConfigs written to $STORE_CONFIG"
+    echo -e "Config options written to '$STORE_CONFIG'"
     exit 0
 }
 
@@ -854,29 +857,18 @@ is_config_opt() {
 
 # Load options from config file
 read_config() {
-    local opt_name opt_val
-    local pos_max=0 pos_num=0 pos_idx
+    local opt_name opt_val line
 
     while read line; do
         # Read switches and their values
-        opt_name="${line%=*}"
+        opt_name="${line%%=*}"
         opt_val="${line#*=}"
         if is_config_opt "$opt_name" ; then
             eval $opt_name="\$opt_val"
-        elif [[ "$opt_name" =~ ^ARG([1-9][0-9]*)$ ]]; then
-            pos_idx="${BASH_REMATCH[1]}"
-            ((pos_num++))
-            [[ $pos_idx > $pos_max ]] && pos_max=$pos_idx
-            LOADED_ARGS[$pos_idx]="$opt_val"
         else
             echo "WARN: Unrecognized configuration entry $opt_name" >&2
         fi
     done < "$LOAD_CONFIG"
-
-    if [[ $pos_num -ne $pos_max ]]; then
-        echo "ERROR: Positional arguments cannot be skipped" >&2
-        exit 1
-    fi
 }
 
 
@@ -1014,10 +1006,15 @@ done
 
 # Load positional args from config file, if needed
 if [[ -n "$LOAD_CONFIG" && $# -eq 0 ]]; then
-    for ((i=$# + 1; i<=${#LOADED_ARGS[@]}; i++)); do
-        ((j=i-1))
-        ((k=i+1))
-        set -- "${@:1:$j}" "${LOADED_ARGS[$i]}" "${@:$k}"
+    i=0
+    # set arguments in order
+    for x in WIFI_IFACE INTERNET_IFACE SSID PASSPHRASE; do
+        if eval "[[ -n \"\$${x}\" ]]"; then
+            eval "set -- \"\${@:1:$i}\" \"\$${x}\""
+            ((i++))
+        fi
+        # we unset the variable to avoid any problems later
+        eval "unset $x"
     done
 fi
 
