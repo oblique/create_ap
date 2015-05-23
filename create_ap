@@ -1127,9 +1127,7 @@ if [[ $USE_PSK -eq 0 ]]; then
         echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
         exit 1
     fi
-fi
-
-if [[ $USE_PSK -eq 1 && ${#PASSPHRASE} -ne 64 ]]; then
+elif [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
     echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
     exit 1
 fi
