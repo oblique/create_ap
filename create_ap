@@ -1087,23 +1087,27 @@ else
             break
         done
         while :; do
-            read -p "Passphrase: " -s PASSPHRASE
-            echo
-            if [[ $USE_PSK -eq 1 ]]; then
-                if [[ ${#PASSPHRASE} -ne 64 ]]; then
+            if [[ $USE_PSK -eq 0 ]]; then
+                read -p "Passphrase: " -s PASSPHRASE
+                echo
+                if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+                    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+                    continue
+                fi
+                read -p "Retype passphrase: " -s PASSPHRASE2
+                echo
+                if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
+                    echo "Passphrases do not match."
+                else
+                    break
+                fi
+            else
+                read -p "PSK: " PASSPHRASE
+                echo
+                if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
                     echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
                     continue
                 fi
-            elif [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-                echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
-                continue
-            fi
-            read -p "Retype passphrase: " -s PASSPHRASE2
-            echo
-            if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
-                echo "Passphrases do not match."
-            else
-                break
             fi
         done
     else
