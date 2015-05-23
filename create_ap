@@ -583,6 +583,7 @@ DAEMONIZE=0
 LIST_RUNNING=0
 STOP_ID=
 NO_HAVEGED=0
+USE_PSK=0
 
 CONFDIR=
 WIFI_IFACE=
@@ -911,7 +912,7 @@ while :; do
             ;;
         --psk)
             shift
-            WPA_MODE="psk"
+            USE_PSK=1
             ;;
         --)
             shift
@@ -919,8 +920,6 @@ while :; do
             ;;
     esac
 done
-
-WPA_MODE=${WPA_MODE:="passphrase"}
 
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" && $LIST_RUNNING -eq 0 ]]; then
     usage >&2
@@ -1090,7 +1089,7 @@ else
         while :; do
             read -p "Passphrase: " -s PASSPHRASE
             echo
-            if [[ ${WPA_MODE} == "psk" ]]; then
+            if [[ $USE_PSK -eq 1 ]]; then
                 if [[ ${#PASSPHRASE} -ne 64 ]]; then
                     echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
                     continue
@@ -1123,14 +1122,14 @@ if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
     exit 1
 fi
 
-if [[ ${WPA_MODE} == "passphrase" ]]; then
+if [[ $USE_PSK -eq 0 ]]; then
     if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
         echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
         exit 1
     fi
 fi
 
-if [[ ${WPA_MODE} == "psk" && ${#PASSPHRASE} -ne 64 ]]; then
+if [[ $USE_PSK -eq 1 && ${#PASSPHRASE} -ne 64 ]]; then
     echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
     exit 1
 fi
@@ -1278,9 +1277,14 @@ fi
 
 if [[ -n "$PASSPHRASE" ]]; then
     [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
+    if [[ $USE_PSK -eq 0 ]]; then
+        WPA_KEY_TYPE=passphrase
+    else
+        WPA_KEY_TYPE=psk
+    fi
     cat << EOF >> $CONFDIR/hostapd.conf
 wpa=${WPA_VERSION}
-wpa_$WPA_MODE=$PASSPHRASE
+wpa_${WPA_KEY_TYPE}=${PASSPHRASE}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP
