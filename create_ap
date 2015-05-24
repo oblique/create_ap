@@ -40,6 +40,7 @@ usage() {
     echo "                      Use: 'nat' for NAT (default)"
     echo "                           'bridge' for bridging"
     echo "                           'none' for no Internet sharing (equivalent to -n)"
+    echo "  --psk               Use 64 hex digits pre-shared-key instead of passphrase"
     echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
     echo "  --ieee80211n        Enable IEEE 802.11n (HT)"
     echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
@@ -582,6 +583,7 @@ DAEMONIZE=0
 LIST_RUNNING=0
 STOP_ID=
 NO_HAVEGED=0
+USE_PSK=0
 
 CONFDIR=
 WIFI_IFACE=
@@ -807,7 +809,7 @@ send_stop() {
 }
 
 ARGS=( "$@" )
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","no-haveged" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","psk","no-haveged" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -907,6 +909,10 @@ while :; do
         --no-haveged)
             shift
             NO_HAVEGED=1
+            ;;
+        --psk)
+            shift
+            USE_PSK=1
             ;;
         --)
             shift
@@ -1081,18 +1087,27 @@ else
             break
         done
         while :; do
-            read -p "Passphrase: " -s PASSPHRASE
-            echo
-            if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-                echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
-                continue
-            fi
-            read -p "Retype passphrase: " -s PASSPHRASE2
-            echo
-            if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
-                echo "Passphrases do not match."
+            if [[ $USE_PSK -eq 0 ]]; then
+                read -p "Passphrase: " -s PASSPHRASE
+                echo
+                if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+                    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+                    continue
+                fi
+                read -p "Retype passphrase: " -s PASSPHRASE2
+                echo
+                if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
+                    echo "Passphrases do not match."
+                else
+                    break
+                fi
             else
-                break
+                read -p "PSK: " PASSPHRASE
+                echo
+                if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
+                    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
+                    continue
+                fi
             fi
         done
     else
@@ -1111,8 +1126,13 @@ if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
     exit 1
 fi
 
-if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+if [[ $USE_PSK -eq 0 ]]; then
+    if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
+        echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+        exit 1
+    fi
+elif [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
+    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
     exit 1
 fi
 
@@ -1259,9 +1279,14 @@ fi
 
 if [[ -n "$PASSPHRASE" ]]; then
     [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
+    if [[ $USE_PSK -eq 0 ]]; then
+        WPA_KEY_TYPE=passphrase
+    else
+        WPA_KEY_TYPE=psk
+    fi
     cat << EOF >> $CONFDIR/hostapd.conf
 wpa=${WPA_VERSION}
-wpa_passphrase=$PASSPHRASE
+wpa_${WPA_KEY_TYPE}=${PASSPHRASE}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP

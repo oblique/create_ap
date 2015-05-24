@@ -47,6 +47,9 @@ _create_ap() {
         -m)
             opts="nat bridge none"
             ;;
+        --psk)
+            # No Options
+            ;;
         --hidden)
             # No Options
             ;;
