@@ -2,6 +2,14 @@
 # Bash Completion routine for create_ap
 #
 
+_use_filedir() {
+    if [[ $(type -t _filedir) == "function" ]]; then
+        _filedir
+        return 0
+    fi
+    return 1
+}
+
 _create_ap() {
     local awk_cmd='
         ($1 ~ /^-/) {
@@ -114,10 +122,17 @@ _create_ap() {
             # No Options
             ;;
         --stop)
-            opts=$("$1" --list)
+            local stop_awk_cmd='$1 ~ /^[0-9]+$/'
+            opts=$("$1" --list | awk "$stop_awk_cmd")
             ;;
         --list)
             # No Options
+            ;;
+        --mkconfig)
+            _use_filedir && return 0
+            ;;
+        --config)
+            _use_filedir && return 0
             ;;
         -g)
             # Not going to implement
