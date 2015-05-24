@@ -56,8 +56,8 @@ usage() {
     echo "  --daemon                Run create_ap in the background"
     echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
     echo "                          you can put the PID of create_ap or the WiFi interface. You can"
-    echo "                          get them with --list"
-    echo "  --list                  Show the create_ap processes that are already running"
+    echo "                          get them with --list-running"
+    echo "  --list-running          Show the create_ap processes that are already running"
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
@@ -891,7 +891,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","version","psk","no-haveged","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","list-running","version","psk","no-haveged","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -985,6 +985,11 @@ while :; do
             shift
             ;;
         --list)
+            shift
+            LIST_RUNNING=1
+            echo -e "WARN: --list is deprecated. Use --list-running instead.\n" 2>&1
+            ;;
+        --list-running)
             shift
             LIST_RUNNING=1
             ;;
@@ -1271,8 +1276,8 @@ echo "Config dir: $CONFDIR"
 echo "PID: $$"
 echo $$ > $CONFDIR/pid
 
-# to make --list work from any user, we must give read
-# permitions to $CONFDIR and $CONFDIR/pid
+# to make --list-running work from any user, we must give read
+# permissions to $CONFDIR and $CONFDIR/pid
 chmod 755 $CONFDIR
 chmod 444 $CONFDIR/pid
 
