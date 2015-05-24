@@ -128,6 +128,10 @@ _create_ap() {
         --list-running)
             # No Options
             ;;
+        --list-clients)
+            local clients_awk_cmd='$1 ~ /^[0-9]+$/'
+            opts=$("$1" --list-running | awk "$clients_awk_cmd")
+            ;;
         --mkconfig)
             _use_filedir && return 0
             ;;
