@@ -58,8 +58,9 @@ usage() {
     echo "                          you can put the PID of create_ap or the WiFi interface. You can"
     echo "                          get them with --list-running"
     echo "  --list-running          Show the create_ap processes that are already running"
-    echo "  --list-clients <id>     List the clients connected to create_ap instance associated with <id>"
+    echo "  --list-clients <id>     List the clients connected to create_ap instance associated with <id>."
     echo "                          For an <id> you can put the PID of create_ap or the WiFi interface."
+    echo "                          If virtual WiFi interface was created, then use that one."
     echo "                          You can get them with --list-running"
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
@@ -790,77 +791,78 @@ list_running() {
     mutex_unlock
 }
 
-list_clients_iface() {
-    local IFACE pid x
+get_wifi_iface_from_pid() {
+    list_running | awk '{print $1 " " $NF}' | tr -d '\(\)' | grep -E "^${1} " | cut -d' ' -f2
+}
+
+get_pid_from_wifi_iface() {
+    list_running | awk '{print $1 " " $NF}' | tr -d '\(\)' | grep -E " ${1}$" | cut -d' ' -f1
+}
+
+get_confdir_from_pid() {
+    local IFACE x
     mutex_lock
-    for x in /tmp/create_ap.*; do
-        if [[ -f $x/pid ]]; then
-            pid=$(cat $x/pid)
-            if [[ -d /proc/$pid && "$LIST_CLIENTS_ID" -eq $pid ]]; then
-                IFACE=${x#*.}
-                IFACE=${IFACE%%.*}
-                echo $IFACE
-                break
-            fi
+    for x in $(list_running_conf); do
+        if [[ $(cat $x/pid) == "$1" ]]; then
+            echo $x
+            break
         fi
     done
     mutex_unlock
 }
 
-list_clients_leaseinfo() {
-    local line lease_flag=0 count="$1" mac="$2"
-    local awk_cmd='{printf "%-20s %-18s %s\n", $2, $3, $4}'
+print_client() {
+    local line ipaddr hostname
+    local mac="$1"
 
-    while read line; do
-        if [[ "$mac" == "$(echo $line | awk '{print $2}')" ]]; then
-            printf "%2s  " "$count"
-            echo $line | awk "$awk_cmd"
-            lease_flag=1
-            break
-        fi
-    done < /var/lib/misc/dnsmasq.leases
-
-    if [[ $lease_flag -eq 0 ]]; then
-        printf "%-20s %-18s %s\n" "$x" "*" "*"
+    if [[ -f $CONFDIR/dnsmasq.leases ]]; then
+        line=$(grep " $mac " $CONFDIR/dnsmasq.leases | tail -n 1)
+        ipaddr=$(echo $line | cut -d' ' -f3)
+        hostname=$(echo $line | cut -d' ' -f4)
     fi
+
+    [[ -z "$ipaddr" ]] && ipaddr="*"
+    [[ -z "$hostname" ]] && hostname="*"
+
+    printf "%-20s %-18s %s\n" "$mac" "$ipaddr" "$hostname"
 }
 
 list_clients() {
+    local wifi_iface pid
+
     # If PID is given, get the associated wifi iface
-    if [[ "$LIST_CLIENTS_ID" =~ ^[1-9][0-9]*$ ]]; then
-        local iface=$(list_clients_iface)
-
-        if [[ -n "$iface" ]]; then
-            LIST_CLIENTS_ID="$iface"
-        else
-            echo "ERROR: '$LIST_CLIENTS_ID' is not the pid of a running $PROGNAME instance" >&2
-            exit 1
-        fi
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
+        pid="$1"
+        wifi_iface=$(get_wifi_iface_from_pid "$pid")
+        [[ -z "$wifi_iface" ]] && die "'$pid' is not the pid of a running $PROGNAME instance."
     fi
 
-    if ! is_wifi_interface "$LIST_CLIENTS_ID"; then
-        echo "ERROR: '$LIST_CLIENTS_ID' is not a WiFi interface." >&2
-        exit 1
-    fi
+    [[ -z "$wifi_iface" ]] && wifi_iface="$1"
+    is_wifi_interface "$wifi_iface" || die "'$wifi_iface' is not a WiFi interface."
+
+    [[ -z "$pid" ]] && pid=$(get_pid_from_wifi_iface "$wifi_iface")
+    [[ -z "$pid" ]] && die "'$wifi_iface' is not used from $PROGNAME instance.\n\
+       Maybe you need to pass the virtual interface instead.\n\
+       Use --list-running to find it out."
+    [[ -z "$CONFDIR" ]] && CONFDIR=$(get_confdir_from_pid "$pid")
 
     if [[ $USE_IWCONFIG -eq 0 ]]; then
         local awk_cmd='($1 ~ /Station$/) {print $2}'
-        local client_list=$(iw dev "$LIST_CLIENTS_ID" station dump | awk "$awk_cmd")
+        local client_list=$(iw dev "$wifi_iface" station dump | awk "$awk_cmd")
 
         if [[ -z "$client_list" ]]; then
             echo "No clients connected"
-        else
-            printf "%3s %-20s %-18s %s\n" "" "MAC" "IP" "Hostname"
+            return
         fi
 
-        local mac count=1
+        printf "%-20s %-18s %s\n" "MAC" "IP" "Hostname"
+
+        local mac
         for mac in $client_list; do
-            list_clients_leaseinfo $count $mac
-            ((count++))
+            print_client $mac
         done
     else
-        echo "ERROR: This option is not supported for the current driver" >&2
-        exit 1
+        die "This option is not supported for the current driver."
     fi
 }
 
@@ -1149,7 +1151,7 @@ if [[ $LIST_RUNNING -eq 1 ]]; then
 fi
 
 if [[ -n "$LIST_CLIENTS_ID" ]]; then
-    list_clients
+    list_clients "$LIST_CLIENTS_ID"
     exit 0
 fi
 
@@ -1632,7 +1634,9 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     iptables -I INPUT -p tcp -m tcp --dport 53 -j ACCEPT || die
     iptables -I INPUT -p udp -m udp --dport 53 -j ACCEPT || die
     iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
-    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid || die
+    umask 0033
+    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases || die
+    umask $SCRIPT_UMASK
 fi
 
 # start access point
