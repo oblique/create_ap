@@ -1071,7 +1071,7 @@ while :; do
         --list)
             shift
             LIST_RUNNING=1
-            echo -e "WARN: --list is deprecated. Use --list-running instead.\n" 2>&1
+            echo -e "WARN: --list is deprecated, use --list-running instead.\n" >&2
             ;;
         --list-running)
             shift
