@@ -766,7 +766,7 @@ list_running_conf() {
     local x
     mutex_lock
     for x in /tmp/create_ap.*; do
-        if [[ -f $x/pid && -d /proc/$(cat $x/pid) ]]; then
+        if [[ -f $x/pid && -f $x/wifi_iface && -d /proc/$(cat $x/pid) ]]; then
             echo $x
         fi
     done
@@ -774,12 +774,18 @@ list_running_conf() {
 }
 
 list_running() {
-    local IFACE x
+    local IFACE wifi_iface x
     mutex_lock
     for x in $(list_running_conf); do
         IFACE=${x#*.}
         IFACE=${IFACE%%.*}
-        echo $(cat $x/pid) $IFACE
+        wifi_iface=$(cat $x/wifi_iface)
+
+        if [[ $IFACE == $wifi_iface ]]; then
+            echo $(cat $x/pid) $IFACE
+        else
+            echo $(cat $x/pid) $IFACE '('$(cat $x/wifi_iface)')'
+        fi
     done
     mutex_unlock
 }
@@ -892,7 +898,7 @@ send_stop() {
     fi
 
     # send stop signal to specific interface
-    for x in $(list_running | grep -E " ${1}\$" | cut -f1 -d' '); do
+    for x in $(list_running | grep -E " \(?${1}( |\)?\$)" | cut -f1 -d' '); do
         kill -USR1 $x
     done
     mutex_unlock
@@ -1434,6 +1440,11 @@ if [[ $NO_VIRT -eq 0 ]]; then
 else
     OLD_MACADDR=$(get_macaddr ${WIFI_IFACE})
 fi
+
+mutex_lock
+echo $WIFI_IFACE > $CONFDIR/wifi_iface
+chmod 444 $CONFDIR/wifi_iface
+mutex_unlock
 
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
 
