@@ -917,12 +917,12 @@ write_config() {
 
     WIFI_IFACE=$1
     if [[ "$SHARE_METHOD" == "none" ]]; then
-        SSID=$2
-        PASSPHRASE=$3
+        SSID="$2"
+        PASSPHRASE="$3"
     else
-        INTERNET_IFACE=$2
-        SSID=$3
-        PASSPHRASE=$4
+        INTERNET_IFACE="$2"
+        SSID="$3"
+        PASSPHRASE="$4"
     fi
 
     for config_opt in "${CONFIG_OPTS[@]}"; do
@@ -1266,16 +1266,16 @@ if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
             usage >&2
             exit 1
         fi
-        INTERNET_IFACE=$2
-        SSID=$3
-        PASSPHRASE=$4
+        INTERNET_IFACE="$2"
+        SSID="$3"
+        PASSPHRASE="$4"
     else
         if [[ $# -ne 2 && $# -ne 3 ]]; then
             usage >&2
             exit 1
         fi
-        SSID=$2
-        PASSPHRASE=$3
+        SSID="$2"
+        PASSPHRASE="$3"
     fi
 else
     if [[ "$SHARE_METHOD" != "none" ]]; then
@@ -1283,7 +1283,7 @@ else
             usage >&2
             exit 1
         fi
-        INTERNET_IFACE=$2
+        INTERNET_IFACE="$2"
     fi
     if tty -s; then
         while :; do
