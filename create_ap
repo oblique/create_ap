@@ -1673,3 +1673,5 @@ clean_exit
 # tab-width: 4
 # indent-tabs-mode: nil
 # End:
+
+# vim: et sts=4 sw=4
