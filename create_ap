@@ -299,7 +299,7 @@ can_transmit_to_channel() {
         return 0
     else
         CHANNEL_NUM=$(printf '%02d' ${CHANNEL_NUM})
-        CHANNEL_INFO=$(iwlist ${IFACE} channel | grep "Channel ${CHANNEL_NUM} :")
+        CHANNEL_INFO=$(iwlist ${IFACE} channel | grep -E "Channel[[:blank:]]${CHANNEL_NUM}[[:blank:]]?:")
         [[ -z "${CHANNEL_INFO}" ]] && return 1
         return 0
     fi
