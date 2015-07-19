@@ -1352,14 +1352,6 @@ if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^rtl[0-9].*$ ]]; then
     echo "WARN: If AP doesn't work, please read: howto/realtek.md" >&2
 fi
 
-if [[ "$SHARE_METHOD" == "bridge" ]]; then
-    if is_bridge_interface $INTERNET_IFACE; then
-        BRIDGE_IFACE=$INTERNET_IFACE
-    else
-        BRIDGE_IFACE=$(alloc_new_iface br)
-    fi
-fi
-
 if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
     echo -n "ERROR: You can not share your connection from the same" >&2
     echo " interface if you are using --no-virt option." >&2
@@ -1391,6 +1383,14 @@ if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
     cp -n /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
 fi
 mutex_unlock
+
+if [[ "$SHARE_METHOD" == "bridge" ]]; then
+    if is_bridge_interface $INTERNET_IFACE; then
+        BRIDGE_IFACE=$INTERNET_IFACE
+    else
+        BRIDGE_IFACE=$(alloc_new_iface br)
+    fi
+fi
 
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=$(alloc_new_iface ap)
