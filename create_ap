@@ -66,6 +66,7 @@ usage() {
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
     echo "Non-Bridging Options:"
+    echo "  --no-dns                Disable dnsmasq DNS server"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                      DNS server will take into account /etc/hosts"
     echo
@@ -575,6 +576,7 @@ CHANNEL=default
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
+NO_DNS=0
 HIDDEN=0
 SHARE_METHOD=nat
 IEEE80211N=0
@@ -589,7 +591,7 @@ NO_HAVEGED=0
 USE_PSK=0
 
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS HIDDEN SHARE_METHOD
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS NO_DNS HIDDEN SHARE_METHOD
              IEEE80211N HT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
@@ -977,7 +979,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1091,6 +1093,10 @@ while :; do
         --psk)
             shift
             USE_PSK=1
+            ;;
+        --no-dns)
+            shift
+            NO_DNS=1
             ;;
         --mkconfig)
             shift
@@ -1629,13 +1635,18 @@ else
     echo "No Internet sharing"
 fi
 
-# start dns + dhcp server
+# start dhcp + dns (optional)
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
-    iptables -I INPUT -p tcp -m tcp --dport 53 -j ACCEPT || die
-    iptables -I INPUT -p udp -m udp --dport 53 -j ACCEPT || die
+    if [[ $NO_DNS -eq 0 ]]; then
+        DNS_PORT=53
+        iptables -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
+        iptables -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
+    else
+        DNS_PORT=0
+    fi
     iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
     umask 0033
-    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases || die
+    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
     umask $SCRIPT_UMASK
 fi
 
