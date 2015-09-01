@@ -1645,6 +1645,13 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
         DNS_PORT=0
     fi
     iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+
+    if which complain > /dev/null 2>&1; then
+        # openSUSE's apparmor does not allow dnsmasq to read files.
+        # remove restriction.
+        complain dnsmasq
+    fi
+
     umask 0033
     dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
     umask $SCRIPT_UMASK
