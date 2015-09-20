@@ -354,6 +354,11 @@ get_macaddr() {
     cat "/sys/class/net/${1}/address"
 }
 
+get_mtu() {
+    is_interface "$1" || return
+    cat "/sys/class/net/${1}/mtu"
+}
+
 alloc_new_iface() {
     local prefix=$1
     local i=0
@@ -1529,6 +1534,8 @@ ${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option=option:router,${GATEWAY}
 EOF
+    MTU=$(get_mtu $INTERNET_IFACE)
+    [[ -n "$MTU" ]] && echo "dhcp-option=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
 fi
 
