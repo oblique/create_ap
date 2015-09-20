@@ -1532,10 +1532,10 @@ else
 listen-address=${GATEWAY}
 ${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
-dhcp-option=option:router,${GATEWAY}
+dhcp-option-force=option:router,${GATEWAY}
 EOF
     MTU=$(get_mtu $INTERNET_IFACE)
-    [[ -n "$MTU" ]] && echo "dhcp-option=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
+    [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
 fi
 
