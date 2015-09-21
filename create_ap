@@ -53,6 +53,7 @@ usage() {
     echo "                          close create_ap, then use this option to switch your interface"
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
+    echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
     echo "  --daemon                Run create_ap in the background"
     echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
     echo "                          you can put the PID of create_ap or the WiFi interface. You can"
@@ -581,6 +582,7 @@ CHANNEL=default
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
+DHCP_DNS=gateway
 NO_DNS=0
 HIDDEN=0
 SHARE_METHOD=nat
@@ -596,7 +598,7 @@ NO_HAVEGED=0
 USE_PSK=0
 
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS NO_DNS HIDDEN SHARE_METHOD
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN SHARE_METHOD
              IEEE80211N HT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
@@ -984,7 +986,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1066,6 +1068,11 @@ while :; do
         --mac)
             shift
             NEW_MACADDR="$1"
+            shift
+            ;;
+        --dhcp-dns)
+            shift
+            DHCP_DNS="$1"
             shift
             ;;
         --daemon)
@@ -1528,11 +1535,15 @@ else
     else
         DNSMASQ_BIND=bind-dynamic
     fi
+    if [[ "$DHCP_DNS" == "gateway" ]]; then
+        DHCP_DNS="$GATEWAY"
+    fi
     cat << EOF > $CONFDIR/dnsmasq.conf
 listen-address=${GATEWAY}
 ${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option-force=option:router,${GATEWAY}
+dhcp-option-force=option:dns-server,${DHCP_DNS}
 EOF
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf

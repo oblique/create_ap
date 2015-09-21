@@ -135,6 +135,9 @@ _create_ap() {
         --no-dns)
             # No Options
             ;;
+        --dhcp-dns)
+            # Not going to implement
+            ;;
         --mkconfig)
             _use_filedir && return 0
             ;;
