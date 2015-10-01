@@ -2,6 +2,7 @@
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
 * Hide your SSID.
+* Disable communication between clients (client isolation).
 * IEEE 802.11n support
 * Internet sharing methods: NATed or Bridged or None (no Internet sharing).
 * Choose the AP Gateway IP (only for 'NATed' and 'None' Internet sharing methods).
@@ -69,6 +70,9 @@
 
 ### Enable IEEE 802.11n
     create_ap --ieee80211n --ht_capab '[HT40+]' wlan0 eth0 MyAccessPoint MyPassPhrase
+
+### Client Isolation:
+    create_ap --isolate-clients wlan0 eth0 MyAccessPoint MyPassPhrase
 
 ## Systemd service
 Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service

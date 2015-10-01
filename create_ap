@@ -42,6 +42,7 @@ usage() {
     echo "                               'none' for no Internet sharing (equivalent to -n)"
     echo "  --psk                   Use 64 hex digits pre-shared-key instead of passphrase"
     echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
+    echo "  --isolate-clients       Disable communication between clients"
     echo "  --ieee80211n            Enable IEEE 802.11n (HT)"
     echo "  --ht_capab <HT>         HT capabilities (default: [HT40+])"
     echo "  --country <code>        Set two-letter country code for regularity (example: US)"
@@ -585,6 +586,7 @@ ETC_HOSTS=0
 DHCP_DNS=gateway
 NO_DNS=0
 HIDDEN=0
+ISOLATE_CLIENTS=0
 SHARE_METHOD=nat
 IEEE80211N=0
 HT_CAPAB='[HT40+]'
@@ -598,7 +600,7 @@ NO_HAVEGED=0
 USE_PSK=0
 
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN SHARE_METHOD
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN ISOLATE_CLIENTS SHARE_METHOD
              IEEE80211N HT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
@@ -986,7 +988,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1003,6 +1005,10 @@ while :; do
         --hidden)
             shift
             HIDDEN=1
+            ;;
+        --isolate-clients)
+            shift
+            ISOLATE_CLIENTS=1
             ;;
         -c)
             shift
@@ -1477,6 +1483,8 @@ fi
 
 [[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
 
+[[ $ISOLATE_CLIENTS -eq 1 ]] && echo "Access Point's clients will be isolated!"
+
 # hostapd config
 cat << EOF > $CONFDIR/hostapd.conf
 beacon_int=100
@@ -1487,6 +1495,7 @@ channel=${CHANNEL}
 ctrl_interface=$CONFDIR/hostapd_ctrl
 ctrl_interface_group=0
 ignore_broadcast_ssid=$HIDDEN
+ap_isolate=$ISOLATE_CLIENTS
 EOF
 
 if [[ -n $COUNTRY ]]; then
