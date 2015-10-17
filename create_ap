@@ -1416,6 +1416,10 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
     fi
 fi
 
+if [[ $USE_IWCONFIG -eq 0 ]]; then
+    iw dev ${WIFI_IFACE} set power_save off
+fi
+
 if [[ $NO_VIRT -eq 0 ]]; then
     VWIFI_IFACE=$(alloc_new_iface ap)
 
