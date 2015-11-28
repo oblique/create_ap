@@ -628,6 +628,42 @@ ROUTE_ADDRS=
 
 HAVEGED_WATCHDOG_PID=
 
+_bridge_share_cleanup() { 
+    ip link set dev $BRIDGE_IFACE down
+    ip link set dev $INTERNET_IFACE down
+    ip link set dev $INTERNET_IFACE promisc off
+    ip link set dev $INTERNET_IFACE nomaster
+    ip link delete $BRIDGE_IFACE type bridge
+    ip addr flush $INTERNET_IFACE
+    ip link set dev $INTERNET_IFACE up
+    dealloc_iface $BRIDGE_IFACE
+
+    for x in "${IP_ADDRS[@]}"; do
+        x="${x/inet/}"
+        x="${x/secondary/}"
+        x="${x/dynamic/}"
+        x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
+        x="${x/${INTERNET_IFACE}/}"
+        ip addr add $x dev $INTERNET_IFACE
+    done
+
+    ip route flush dev $INTERNET_IFACE
+
+    for x in "${ROUTE_ADDRS[@]}"; do
+        [[ -z "$x" ]] && continue
+        [[ "$x" == default* ]] && continue
+        ip route add $x dev $INTERNET_IFACE
+    done
+
+    for x in "${ROUTE_ADDRS[@]}"; do
+        [[ -z "$x" ]] && continue
+        [[ "$x" != default* ]] && continue
+        ip route add $x dev $INTERNET_IFACE
+    done
+
+    networkmanager_rm_unmanaged_if_needed $INTERNET_IFACE
+}
+
 _cleanup() {
     local PID x
 
@@ -692,39 +728,7 @@ _cleanup() {
             iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             if ! is_bridge_interface $INTERNET_IFACE; then
-                ip link set dev $BRIDGE_IFACE down
-                ip link set dev $INTERNET_IFACE down
-                ip link set dev $INTERNET_IFACE promisc off
-                ip link set dev $INTERNET_IFACE nomaster
-                ip link delete $BRIDGE_IFACE type bridge
-                ip addr flush $INTERNET_IFACE
-                ip link set dev $INTERNET_IFACE up
-                dealloc_iface $BRIDGE_IFACE
-
-                for x in "${IP_ADDRS[@]}"; do
-                    x="${x/inet/}"
-                    x="${x/secondary/}"
-                    x="${x/dynamic/}"
-                    x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
-                    x="${x/${INTERNET_IFACE}/}"
-                    ip addr add $x dev $INTERNET_IFACE
-                done
-
-                ip route flush dev $INTERNET_IFACE
-
-                for x in "${ROUTE_ADDRS[@]}"; do
-                    [[ -z "$x" ]] && continue
-                    [[ "$x" == default* ]] && continue
-                    ip route add $x dev $INTERNET_IFACE
-                done
-
-                for x in "${ROUTE_ADDRS[@]}"; do
-                    [[ -z "$x" ]] && continue
-                    [[ "$x" != default* ]] && continue
-                    ip route add $x dev $INTERNET_IFACE
-                done
-
-                networkmanager_rm_unmanaged_if_needed $INTERNET_IFACE
+                _bridge_share_cleanup
             fi
         fi
     fi
