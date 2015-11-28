@@ -783,6 +783,23 @@ clean_exit() {
     exit 0
 }
 
+# Check to see if an iptable rule exists
+check_for_rule() {
+    local RULE=$@
+    iptables -C ${RULE} &> /dev/null
+    echo "$?"
+}
+
+# Insert an iptable rule if it doesn't 
+# already exist.
+insert_rule_if_empty() {
+    local RULE=$@
+    local CHECKRES=$(check_for_rule ${RULE})
+    if [[ "$CHECKRES" -eq "1" ]]; then 
+        iptables -I ${RULE} || die
+    fi 
+}
+
 list_running_conf() {
     local x
     mutex_lock
@@ -1723,12 +1740,16 @@ fi
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=53
-        iptables -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
-        iptables -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
+        DNS_TCP_RULE="INPUT -p tcp -m tcp --dport ${DNS_PORT} -j ACCEPT"
+        insert_rule_if_empty ${DNS_TCP_RULE}
+        DNS_UDP_RULE="INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT"
+        insert_rule_if_empty ${DNS_UDP_RULE}
     else
         DNS_PORT=0
     fi
-    iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+    # Implement the DHCP iptable rule on the WLAN side. 
+    DHCP_UDP_RULE="INPUT -p udp -m udp --dport 67 -j ACCEPT"
+    insert_rule_if_empty ${DHCP_UDP_RULE}
 
     if which complain > /dev/null 2>&1; then
         # openSUSE's apparmor does not allow dnsmasq to read files.
