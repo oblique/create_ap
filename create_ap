@@ -66,6 +66,10 @@ usage() {
     echo "                          For an <id> you can put the PID of create_ap or the WiFi interface."
     echo "                          If virtual WiFi interface was created, then use that one."
     echo "                          You can get them with --list-running"
+    echo "  --load-rules <file>     Load iptable rules from a file. This"
+    echo "                          is only used in NAT sharing mode."
+    echo "                          Uses iptables-restore to apply rules" 
+    echo "                          file."
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
@@ -615,6 +619,7 @@ STOP_ID=
 LIST_CLIENTS_ID=
 
 RESTORE_RULES=
+LOAD_RULES=
 
 STORE_CONFIG=
 LOAD_CONFIG=
@@ -683,6 +688,12 @@ _cleanup() {
         [[ -f $x ]] && kill -9 $(cat $x)
     done
 
+    if [[ -e "$RESTORE_RULES" ]]; then
+        iptables-restore < ${RESTORE_RULES}
+    else
+        echo "Failed restore IPTable rules from file: ${RESTORE_RULES}"
+    fi
+
     rm -rf $CONFDIR
 
     local found=0
@@ -727,12 +738,6 @@ _cleanup() {
         if ! is_bridge_interface $INTERNET_IFACE; then
             _bridge_share_cleanup
         fi
-    fi
-
-    if [[ -e "$RESTORE_RULES" ]]; then
-        restore-iptables < ${RESTORE_RULES}
-    else
-        echo "Failed restore IPTable rules from file: ${RESTORE_RULES}"
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1001,7 +1006,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","load-rules:","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1143,6 +1148,11 @@ while :; do
                 printf "Error: argument for --hostapd-debug expected 1 or 2, got %s\n" "$1"
                 exit 1
             fi
+            shift
+            ;;
+        --load-rules)
+            shift
+            LOAD_RULES="$1"
             shift
             ;;
         --mkconfig)
@@ -1624,7 +1634,12 @@ iptables-save > ${RESTORE_RULES} || die "Failed to save the current iptables rul
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        _setup_nat_iptables
+        if [[ -e "$LOAD_RULES" ]]; then 
+            iptables-restore < ${LOAD_RULES} || die "Failed to load iptable rules"
+        else
+            # Default set of rules to load for NAT
+            _setup_nat_iptables
+        fi 
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         # to enable clients to establish PPTP connections we must
