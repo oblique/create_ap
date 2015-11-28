@@ -614,6 +614,8 @@ LIST_RUNNING=0
 STOP_ID=
 LIST_CLIENTS_ID=
 
+RESTORE_RULES=
+
 STORE_CONFIG=
 LOAD_CONFIG=
 
@@ -721,22 +723,16 @@ _cleanup() {
         rm -rf $COMMON_CONFDIR
     fi
 
-    if [[ "$SHARE_METHOD" != "none" ]]; then
-        if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE
-            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
-            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
-        elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-            if ! is_bridge_interface $INTERNET_IFACE; then
-                _bridge_share_cleanup
-            fi
+    if [[ "$SHARE_METHOD" == "bridge" ]]; then
+        if ! is_bridge_interface $INTERNET_IFACE; then
+            _bridge_share_cleanup
         fi
     fi
 
-    if [[ "$SHARE_METHOD" != "bridge" ]]; then
-        iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
-        iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT
-        iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+    if [[ -e "$RESTORE_RULES" ]]; then
+        restore-iptables < ${RESTORE_RULES}
+    else
+        echo "Failed restore IPTable rules from file: ${RESTORE_RULES}"
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1422,6 +1418,8 @@ echo "Config dir: $CONFDIR"
 echo "PID: $$"
 echo $$ > $CONFDIR/pid
 
+RESTORE_RULES=${CONFDIR}/restore.rules
+
 # to make --list-running work from any user, we must give read
 # permissions to $CONFDIR and $CONFDIR/pid
 chmod 755 $CONFDIR
@@ -1617,6 +1615,10 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     ip link set up dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
 fi
+
+# Save the current iptables so we can muck with 
+# then as we like
+iptables-save > ${RESTORE_RULES} || die "Failed to save the current iptables rules before modifying"
 
 # enable Internet sharing
 if [[ "$SHARE_METHOD" != "none" ]]; then
