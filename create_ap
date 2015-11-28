@@ -979,6 +979,15 @@ read_config() {
     done < "$LOAD_CONFIG"
 }
 
+_setup_nat_iptables() {
+    iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} \
+        -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
+    iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 \
+        -j ACCEPT || die
+    iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 \
+        -j ACCEPT || die
+}
+
 
 ARGS=( "$@" )
 
@@ -1613,9 +1622,7 @@ fi
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
-        iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
-        iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        _setup_nat_iptables
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         # to enable clients to establish PPTP connections we must
