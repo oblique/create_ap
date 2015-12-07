@@ -56,6 +56,7 @@ usage() {
     echo "                          close create_ap, then use this option to switch your interface"
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
+    echo "  --mac-accept <accept_file>Enable MAC address whitelist from accept_file"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
     echo "  --daemon                Run create_ap in the background"
     echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
@@ -992,7 +993,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","mac-accept:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1078,6 +1079,11 @@ while :; do
         --mac)
             shift
             NEW_MACADDR="$1"
+            shift
+            ;;
+        --mac-accept)
+            shift
+            ACCEPT_MAC_FILE="$1"
             shift
             ;;
         --dhcp-dns)
@@ -1521,6 +1527,11 @@ ctrl_interface_group=0
 ignore_broadcast_ssid=$HIDDEN
 ap_isolate=$ISOLATE_CLIENTS
 EOF
+
+if [[ -n $ACCEPT_MAC_FILE ]]; then
+    echo "macaddr_acl=1" >> $CONFDIR/hostapd.conf
+    echo "accept_mac_file=$ACCEPT_MAC_FILE" >> $CONFDIR/hostapd.conf
+fi
 
 if [[ -n $COUNTRY ]]; then
     [[ $USE_IWCONFIG -eq 0 ]] && iw reg set $COUNTRY
