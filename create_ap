@@ -444,9 +444,9 @@ networkmanager_is_running() {
     local NMCLI_OUT
     networkmanager_exists || return 1
     if [[ $NM_OLDER_VERSION -eq 1 ]]; then
-        NMCLI_OUT=$(nmcli -t -f RUNNING nm)
+        NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
     else
-        NMCLI_OUT=$(nmcli -t -f RUNNING g)
+        NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
     fi
     [[ "$NMCLI_OUT" == "running" ]]
 }
