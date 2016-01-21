@@ -444,16 +444,16 @@ networkmanager_is_running() {
     local NMCLI_OUT
     networkmanager_exists || return 1
     if [[ $NM_OLDER_VERSION -eq 1 ]]; then
-        NMCLI_OUT=$(nmcli -t -f RUNNING nm 2> /dev/null)
+        NMCLI_OUT=$(nmcli -t -f RUNNING nm 2>&1 | grep -E '^running$')
     else
-        NMCLI_OUT=$(nmcli -t -f RUNNING g 2> /dev/null)
+        NMCLI_OUT=$(nmcli -t -f RUNNING g 2>&1 | grep -E '^running$')
     fi
-    [[ "$NMCLI_OUT" == "running" ]]
+    [[ -n "$NMCLI_OUT" ]]
 }
 
 networkmanager_iface_is_unmanaged() {
     is_interface "$1" || return 2
-    (nmcli -t -f DEVICE,STATE d | grep -E "^$1:unmanaged$" > /dev/null 2>&1) || return 1
+    (nmcli -t -f DEVICE,STATE d 2>&1 | grep -E "^$1:unmanaged$" > /dev/null 2>&1) || return 1
 }
 
 ADDED_UNMANAGED=
@@ -1498,10 +1498,14 @@ mutex_unlock
 
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
 
-if networkmanager_is_running && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
+if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
     echo -n "Network Manager found, set ${WIFI_IFACE} as unmanaged device... "
     networkmanager_add_unmanaged ${WIFI_IFACE}
-    networkmanager_wait_until_unmanaged ${WIFI_IFACE}
+
+    if networkmanager_is_running; then
+        networkmanager_wait_until_unmanaged ${WIFI_IFACE}
+    fi
+
     echo "DONE"
 fi
 
