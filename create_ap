@@ -511,6 +511,9 @@ networkmanager_add_unmanaged() {
     ADDED_UNMANAGED="${ADDED_UNMANAGED} ${1} "
     mutex_unlock
 
+    local nm_pid=$(pidof NetworkManager)
+    [[ -n "$nm_pid" ]] && kill -HUP $nm_pid
+
     return 0
 }
 
@@ -551,14 +554,21 @@ networkmanager_rm_unmanaged() {
     ADDED_UNMANAGED="${ADDED_UNMANAGED/ ${1} /}"
     mutex_unlock
 
+    local nm_pid=$(pidof NetworkManager)
+    [[ -n "$nm_pid" ]] && kill -HUP $nm_pid
+
     return 0
 }
 
 networkmanager_fix_unmanaged() {
     [[ -f ${NETWORKMANAGER_CONF} ]] || return
+
     mutex_lock
     sed -e "/^unmanaged-devices=.*/d" -i ${NETWORKMANAGER_CONF}
     mutex_unlock
+
+    local nm_pid=$(pidof NetworkManager)
+    [[ -n "$nm_pid" ]] && kill -HUP $nm_pid
 }
 
 networkmanager_rm_unmanaged_if_needed() {
