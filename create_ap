@@ -1735,7 +1735,7 @@ if [[ $NO_HAVEGED -eq 0 ]]; then
     HAVEGED_WATCHDOG_PID=$!
 fi
 
-# start hostapd (use stdbuf for no delayed output in porgrams that redirect stdout)
+# start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
 stdbuf -oL hostapd $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
 HOSTAPD_PID=$!
 echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
