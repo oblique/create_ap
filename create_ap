@@ -66,6 +66,10 @@ usage() {
     echo "                          For an <id> you can put the PID of create_ap or the WiFi interface."
     echo "                          If virtual WiFi interface was created, then use that one."
     echo "                          You can get them with --list-running"
+    echo "  --load-rules <file>     Load iptable rules from a file. This"
+    echo "                          is only used in NAT sharing mode."
+    echo "                          Uses iptables-restore to apply rules" 
+    echo "                          file."
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
@@ -624,6 +628,9 @@ LIST_RUNNING=0
 STOP_ID=
 LIST_CLIENTS_ID=
 
+RESTORE_RULES=
+LOAD_RULES=
+
 STORE_CONFIG=
 LOAD_CONFIG=
 
@@ -637,6 +644,42 @@ IP_ADDRS=
 ROUTE_ADDRS=
 
 HAVEGED_WATCHDOG_PID=
+
+_bridge_share_cleanup() { 
+    ip link set dev $BRIDGE_IFACE down
+    ip link set dev $INTERNET_IFACE down
+    ip link set dev $INTERNET_IFACE promisc off
+    ip link set dev $INTERNET_IFACE nomaster
+    ip link delete $BRIDGE_IFACE type bridge
+    ip addr flush $INTERNET_IFACE
+    ip link set dev $INTERNET_IFACE up
+    dealloc_iface $BRIDGE_IFACE
+
+    for x in "${IP_ADDRS[@]}"; do
+        x="${x/inet/}"
+        x="${x/secondary/}"
+        x="${x/dynamic/}"
+        x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
+        x="${x/${INTERNET_IFACE}/}"
+        ip addr add $x dev $INTERNET_IFACE
+    done
+
+    ip route flush dev $INTERNET_IFACE
+
+    for x in "${ROUTE_ADDRS[@]}"; do
+        [[ -z "$x" ]] && continue
+        [[ "$x" == default* ]] && continue
+        ip route add $x dev $INTERNET_IFACE
+    done
+
+    for x in "${ROUTE_ADDRS[@]}"; do
+        [[ -z "$x" ]] && continue
+        [[ "$x" != default* ]] && continue
+        ip route add $x dev $INTERNET_IFACE
+    done
+
+    networkmanager_rm_unmanaged_if_needed $INTERNET_IFACE
+}
 
 _cleanup() {
     local PID x
@@ -654,6 +697,12 @@ _cleanup() {
         # a value in $x. so we need to check if the value is a file
         [[ -f $x ]] && kill -9 $(cat $x)
     done
+
+    if [[ -e "$RESTORE_RULES" ]]; then
+        iptables-restore < ${RESTORE_RULES}
+    else
+        echo "Failed restore IPTable rules from file: ${RESTORE_RULES}"
+    fi
 
     rm -rf $CONFDIR
 
@@ -695,54 +744,10 @@ _cleanup() {
         rm -rf $COMMON_CONFDIR
     fi
 
-    if [[ "$SHARE_METHOD" != "none" ]]; then
-        if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE
-            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
-            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
-        elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-            if ! is_bridge_interface $INTERNET_IFACE; then
-                ip link set dev $BRIDGE_IFACE down
-                ip link set dev $INTERNET_IFACE down
-                ip link set dev $INTERNET_IFACE promisc off
-                ip link set dev $INTERNET_IFACE nomaster
-                ip link delete $BRIDGE_IFACE type bridge
-                ip addr flush $INTERNET_IFACE
-                ip link set dev $INTERNET_IFACE up
-                dealloc_iface $BRIDGE_IFACE
-
-                for x in "${IP_ADDRS[@]}"; do
-                    x="${x/inet/}"
-                    x="${x/secondary/}"
-                    x="${x/dynamic/}"
-                    x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
-                    x="${x/${INTERNET_IFACE}/}"
-                    ip addr add $x dev $INTERNET_IFACE
-                done
-
-                ip route flush dev $INTERNET_IFACE
-
-                for x in "${ROUTE_ADDRS[@]}"; do
-                    [[ -z "$x" ]] && continue
-                    [[ "$x" == default* ]] && continue
-                    ip route add $x dev $INTERNET_IFACE
-                done
-
-                for x in "${ROUTE_ADDRS[@]}"; do
-                    [[ -z "$x" ]] && continue
-                    [[ "$x" != default* ]] && continue
-                    ip route add $x dev $INTERNET_IFACE
-                done
-
-                networkmanager_rm_unmanaged_if_needed $INTERNET_IFACE
-            fi
+    if [[ "$SHARE_METHOD" == "bridge" ]]; then
+        if ! is_bridge_interface $INTERNET_IFACE; then
+            _bridge_share_cleanup
         fi
-    fi
-
-    if [[ "$SHARE_METHOD" != "bridge" ]]; then
-        iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
-        iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT
-        iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -786,6 +791,23 @@ clean_exit() {
     [[ $BASHPID -ne $$ ]] && kill -USR1 $$
     # we don't need to call cleanup because it's traped on EXIT
     exit 0
+}
+
+# Check to see if an iptable rule exists
+check_for_rule() {
+    local RULE=$@
+    iptables -C ${RULE} &> /dev/null
+    echo "$?"
+}
+
+# Insert an iptable rule if it doesn't 
+# already exist.
+insert_rule_if_empty() {
+    local RULE=$@
+    local CHECKRES=$(check_for_rule ${RULE})
+    if [[ "$CHECKRES" -eq "1" ]]; then 
+        iptables -I ${RULE} || die
+    fi 
 }
 
 list_running_conf() {
@@ -985,6 +1007,15 @@ read_config() {
     done < "$LOAD_CONFIG"
 }
 
+_setup_nat_iptables() {
+    iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} \
+        -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
+    iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 \
+        -j ACCEPT || die
+    iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 \
+        -j ACCEPT || die
+}
+
 
 ARGS=( "$@" )
 
@@ -1002,7 +1033,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","load-rules:","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1144,6 +1175,11 @@ while :; do
                 printf "Error: argument for --hostapd-debug expected 1 or 2, got %s\n" "$1"
                 exit 1
             fi
+            shift
+            ;;
+        --load-rules)
+            shift
+            LOAD_RULES="$1"
             shift
             ;;
         --mkconfig)
@@ -1419,6 +1455,8 @@ echo "Config dir: $CONFDIR"
 echo "PID: $$"
 echo $$ > $CONFDIR/pid
 
+RESTORE_RULES=${CONFDIR}/restore.rules
+
 # to make --list-running work from any user, we must give read
 # permissions to $CONFDIR and $CONFDIR/pid
 chmod 755 $CONFDIR
@@ -1619,13 +1657,20 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
 fi
 
+# Save the current iptables so we can muck with 
+# then as we like
+iptables-save > ${RESTORE_RULES} || die "Failed to save the current iptables rules before modifying"
+
 # enable Internet sharing
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
-        iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
-        iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        if [[ -e "$LOAD_RULES" ]]; then 
+            iptables-restore < ${LOAD_RULES} || die "Failed to load iptable rules"
+        else
+            # Default set of rules to load for NAT
+            _setup_nat_iptables
+        fi 
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         # to enable clients to establish PPTP connections we must
@@ -1709,12 +1754,16 @@ fi
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=53
-        iptables -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
-        iptables -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
+        DNS_TCP_RULE="INPUT -p tcp -m tcp --dport ${DNS_PORT} -j ACCEPT"
+        insert_rule_if_empty ${DNS_TCP_RULE}
+        DNS_UDP_RULE="INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT"
+        insert_rule_if_empty ${DNS_UDP_RULE}
     else
         DNS_PORT=0
     fi
-    iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+    # Implement the DHCP iptable rule on the WLAN side. 
+    DHCP_UDP_RULE="INPUT -p udp -m udp --dport 67 -j ACCEPT"
+    insert_rule_if_empty ${DHCP_UDP_RULE}
 
     if which complain > /dev/null 2>&1; then
         # openSUSE's apparmor does not allow dnsmasq to read files.
