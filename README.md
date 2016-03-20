@@ -17,6 +17,7 @@
 * procps or procps-ng
 * hostapd
 * iproute2
+* dnsmasq
 * iw
 * iwconfig (you only need this if 'iw' can not recognize your adapter)
 * haveged (optional)
