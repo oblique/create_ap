@@ -697,9 +697,9 @@ _cleanup() {
 
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE
-            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
-            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -w -t nat -D POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE
+            iptables -w -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -w -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             if ! is_bridge_interface $INTERNET_IFACE; then
                 ip link set dev $BRIDGE_IFACE down
@@ -740,9 +740,9 @@ _cleanup() {
     fi
 
     if [[ "$SHARE_METHOD" != "bridge" ]]; then
-        iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
-        iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT
-        iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+        iptables -w -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
+        iptables -w -D INPUT -p udp -m udp --dport 53 -j ACCEPT
+        iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1623,9 +1623,9 @@ fi
 if [[ "$SHARE_METHOD" != "none" ]]; then
     echo "Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
-        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
-        iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
-        iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        iptables -w -t nat -I POSTROUTING -o ${INTERNET_IFACE} -s ${GATEWAY%.*}.0/24 -j MASQUERADE || die
+        iptables -w -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        iptables -w -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         # to enable clients to establish PPTP connections we must
@@ -1709,12 +1709,12 @@ fi
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=53
-        iptables -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
-        iptables -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
+        iptables -w -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
+        iptables -w -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
     else
         DNS_PORT=0
     fi
-    iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+    iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
 
     if which complain > /dev/null 2>&1; then
         # openSUSE's apparmor does not allow dnsmasq to read files.
