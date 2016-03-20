@@ -741,12 +741,12 @@ _cleanup() {
 
     if [[ "$SHARE_METHOD" != "bridge" ]]; then
         if [[ $NO_DNS -eq 0 ]]; then
-            iptables -w -D INPUT -p tcp -m tcp --dport 5353 -j ACCEPT || die
-            iptables -w -D INPUT -p udp -m udp --dport 5353 -j ACCEPT || die
+            iptables -w -D INPUT -p tcp -m tcp --dport 5353 -j ACCEPT
+            iptables -w -D INPUT -p udp -m udp --dport 5353 -j ACCEPT
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
-                -p tcp -m tcp --dport 53 -j REDIRECT --to-ports 5353 || die
+                -p tcp -m tcp --dport 53 -j REDIRECT --to-ports 5353
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
-                -p udp -m udp --dport 53 -j REDIRECT --to-ports 5353 || die
+                -p udp -m udp --dport 53 -j REDIRECT --to-ports 5353
         fi
         iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
     fi
