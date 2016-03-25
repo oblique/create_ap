@@ -1512,6 +1512,10 @@ echo $WIFI_IFACE > $CONFDIR/wifi_iface
 chmod 444 $CONFDIR/wifi_iface
 mutex_unlock
 
+if [[ -n "$COUNTRY" && $USE_IWCONFIG -eq 0 ]]; then
+    iw reg set "$COUNTRY"
+fi
+
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
 
 if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
@@ -1542,8 +1546,7 @@ ignore_broadcast_ssid=$HIDDEN
 ap_isolate=$ISOLATE_CLIENTS
 EOF
 
-if [[ -n $COUNTRY ]]; then
-    [[ $USE_IWCONFIG -eq 0 ]] && iw reg set $COUNTRY
+if [[ -n "$COUNTRY" ]]; then
     echo "country_code=${COUNTRY}" >> $CONFDIR/hostapd.conf
 fi
 
