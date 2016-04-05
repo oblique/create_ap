@@ -46,7 +46,9 @@ usage() {
     echo "  --hostapd-debug <level> With level between 1 and 2, passes arguments -d or -dd to hostapd for debugging."
     echo "  --isolate-clients       Disable communication between clients"
     echo "  --ieee80211n            Enable IEEE 802.11n (HT)"
+    echo "  --ieee80211ac           Enable IEEE 802.11ac (VHT)"
     echo "  --ht_capab <HT>         HT capabilities (default: [HT40+])"
+    echo "  --vht_capab <VHT>       VHT capabilities"
     echo "  --country <code>        Set two-letter country code for regularity (example: US)"
     echo "  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
     echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
@@ -601,7 +603,9 @@ HIDDEN=0
 ISOLATE_CLIENTS=0
 SHARE_METHOD=nat
 IEEE80211N=0
+IEEE80211AC=0
 HT_CAPAB='[HT40+]'
+VHT_CAPAB=
 DRIVER=nl80211
 NO_VIRT=0
 COUNTRY=
@@ -615,7 +619,7 @@ HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN ISOLATE_CLIENTS SHARE_METHOD
-             IEEE80211N HT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
+             IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
 
@@ -1008,7 +1012,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1063,9 +1067,18 @@ while :; do
             shift
             IEEE80211N=1
             ;;
+        --ieee80211ac)
+            shift
+            IEEE80211AC=1
+            ;;
         --ht_capab)
             shift
             HT_CAPAB="$1"
+            shift
+            ;;
+        --vht_capab)
+            shift
+            VHT_CAPAB="$1"
             shift
             ;;
         --driver)
@@ -1559,9 +1572,20 @@ fi
 if [[ $IEEE80211N -eq 1 ]]; then
     cat << EOF >> $CONFDIR/hostapd.conf
 ieee80211n=1
-wmm_enabled=1
 ht_capab=${HT_CAPAB}
 EOF
+fi
+
+if [[ $IEEE80211AC -eq 1 ]]; then
+  echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
+fi
+
+if [[ -n "$VHT_CAPAB" ]]; then
+    echo "vht_capab=${VHT_CAPAB}" >> $CONFDIR/hostapd.conf
+fi
+
+if [[ $IEEE80211N -eq 1 ]] || [[ $IEEE80211AC -eq 1 ]]; then
+  echo "wmm_enabled=1" >> $CONFDIR/hostapd.conf
 fi
 
 if [[ -n "$PASSPHRASE" ]]; then
