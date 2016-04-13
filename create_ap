@@ -1294,7 +1294,7 @@ fi
 
 HOSTAPD=$(which hostapd)
 
-if ! -x "$HOSTAPD"; then
+if [[ ! -x "$HOSTAPD" ]]; then
     echo "ERROR: hostapd not found." >&2
     exit 1
 fi
