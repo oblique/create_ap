@@ -1567,7 +1567,10 @@ ap_isolate=$ISOLATE_CLIENTS
 EOF
 
 if [[ -n "$COUNTRY" ]]; then
-    echo "country_code=${COUNTRY}" >> $CONFDIR/hostapd.conf
+    cat << EOF >> $CONFDIR/hostapd.conf
+country_code=${COUNTRY}
+ieee80211d=1
+EOF
 fi
 
 if [[ $FREQ_BAND == 2.4 ]]; then
@@ -1584,7 +1587,7 @@ EOF
 fi
 
 if [[ $IEEE80211AC -eq 1 ]]; then
-  echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
+    echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
 fi
 
 if [[ -n "$VHT_CAPAB" ]]; then
@@ -1592,7 +1595,7 @@ if [[ -n "$VHT_CAPAB" ]]; then
 fi
 
 if [[ $IEEE80211N -eq 1 ]] || [[ $IEEE80211AC -eq 1 ]]; then
-  echo "wmm_enabled=1" >> $CONFDIR/hostapd.conf
+    echo "wmm_enabled=1" >> $CONFDIR/hostapd.conf
 fi
 
 if [[ -n "$PASSPHRASE" ]]; then
