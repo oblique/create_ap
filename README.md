@@ -3,7 +3,7 @@
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
 * Hide your SSID.
 * Disable communication between clients (client isolation).
-* IEEE 802.11n support
+* IEEE 802.11n & 802.11ac support
 * Internet sharing methods: NATed or Bridged or None (no Internet sharing).
 * Choose the AP Gateway IP (only for 'NATed' and 'None' Internet sharing methods).
 * You can create an AP with the same interface you are getting your Internet connection.
