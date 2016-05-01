@@ -1292,8 +1292,15 @@ if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     fi
 fi
 
+HOSTAPD=$(which hostapd)
+
+if [[ ! -x "$HOSTAPD" ]]; then
+    echo "ERROR: hostapd not found." >&2
+    exit 1
+fi
+
 if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^(8192[cd][ue]|8723a[sue])$ ]]; then
-    if ! strings $(which hostapd) | grep -m1 rtl871xdrv > /dev/null 2>&1; then
+    if ! strings "$HOSTAPD" | grep -m1 rtl871xdrv > /dev/null 2>&1; then
         echo "ERROR: You need to patch your hostapd with rtl871xdrv patches." >&2
         exit 1
     fi
@@ -1773,7 +1780,7 @@ if [[ $NO_HAVEGED -eq 0 ]]; then
 fi
 
 # start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
-stdbuf -oL hostapd $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
+stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
 HOSTAPD_PID=$!
 echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
 
