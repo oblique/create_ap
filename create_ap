@@ -1510,7 +1510,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
        Try again with --no-virt."
     echo -n "Creating a virtual WiFi interface... "
 
-    if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type managed; then
+    if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
         # now we can call networkmanager_wait_until_unmanaged
         networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]] && networkmanager_wait_until_unmanaged ${VWIFI_IFACE}
         echo "${VWIFI_IFACE} created."
