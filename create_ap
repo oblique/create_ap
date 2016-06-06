@@ -42,7 +42,8 @@ usage() {
     echo "                               'none' for no Internet sharing (equivalent to -n)"
     echo "  --psk                   Use 64 hex digits pre-shared-key instead of passphrase"
     echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
-    echo "  --mac-filter            Enable MAC address filtering (addresses can be added to /etc/hostapd/hostapd.accept)"
+    echo "  --mac-filter            Enable MAC address filtering"
+    echo "  --mac-filter-accept     Location of MAC address filter list (defaults to /etc/hostapd/hostapd.accept)"
     echo "  --redirect-to-localhost If -n is set, redirect every web request to localhost (useful for public information networks)"
     echo "  --hostapd-debug <level> With level between 1 and 2, passes arguments -d or -dd to hostapd for debugging."
     echo "  --isolate-clients       Disable communication between clients"
@@ -602,6 +603,7 @@ DHCP_DNS=gateway
 NO_DNS=0
 HIDDEN=0
 MAC_FILTER=0
+MAC_FILTER_ACCEPT=/etc/hostapd/hostapd.accept
 ISOLATE_CLIENTS=0
 SHARE_METHOD=nat
 IEEE80211N=0
@@ -620,8 +622,8 @@ USE_PSK=0
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN MAC_FILTER ISOLATE_CLIENTS SHARE_METHOD
-             IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+             SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
 
@@ -1014,7 +1016,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1035,6 +1037,11 @@ while :; do
         --mac-filter)
             shift
             MAC_FILTER=1
+            ;;
+        --mac-filter-accept)
+            shift
+            MAC_FILTER_ACCEPT="$1"
+            shift
             ;;
         --isolate-clients)
             shift
@@ -1587,10 +1594,10 @@ else
     echo "hw_mode=a" >> $CONFDIR/hostapd.conf
 fi
 
-if [[ -n $MAC_FILTER ]]; then
+if [[ $MAC_FILTER -eq 1 ]]; then
     cat << EOF >> $CONFDIR/hostapd.conf
 macaddr_acl=${MAC_FILTER}
-accept_mac_file=/etc/hostapd/hostapd.accept
+accept_mac_file=${MAC_FILTER_ACCEPT}
 EOF
 fi
 

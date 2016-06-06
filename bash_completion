@@ -64,6 +64,9 @@ _create_ap() {
         --mac-filter)
             # No Options
             ;;
+        --mac-filter-accept)
+            # No Options
+            ;;
         --ieee80211n)
             # No Options
             ;;
