@@ -1404,6 +1404,14 @@ else
     fi
 fi
 
+if [[ $INTERNET_IFACE == 'default' ]]; then
+    INTERNET_IFACE="$(ip route | awk '/default/ { print $5 }')"
+    if [[ -z $INTERNET_IFACE ]]; then
+        echo "ERROR: default route doesn't exist" >&2
+        exit 1
+    fi
+fi
+
 if [[ "$SHARE_METHOD" != "none" ]] && ! is_interface $INTERNET_IFACE; then
     echo "ERROR: '${INTERNET_IFACE}' is not an interface" >&2
     exit 1
