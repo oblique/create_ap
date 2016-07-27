@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/create_ap -n -g 10.0.0.1 wlan0 AccessPointSSID
+ExecStart=/usr/bin/create_ap --config /etc/create_ap.conf
 KillSignal=SIGINT
 Restart=on-failure
 RestartSec=5
