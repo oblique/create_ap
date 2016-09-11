@@ -59,6 +59,7 @@ usage() {
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
+    echo "  --dhcp-hosts <file>     Load DHCP address reservation list from file"
     echo "  --daemon                Run create_ap in the background"
     echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
     echo "                          you can put the PID of create_ap or the WiFi interface. You can"
@@ -639,6 +640,7 @@ BRIDGE_IFACE=
 OLD_MACADDR=
 IP_ADDRS=
 ROUTE_ADDRS=
+DHCP_HOSTS=
 
 HAVEGED_WATCHDOG_PID=
 
@@ -1112,6 +1114,11 @@ while :; do
         --dhcp-dns)
             shift
             DHCP_DNS="$1"
+            shift
+            ;;
+        --dhcp-hosts)
+            shift
+            DHCP_HOSTS="$1"
             shift
             ;;
         --daemon)
@@ -1642,6 +1649,20 @@ EOF
         cat << EOF >> $CONFDIR/dnsmasq.conf
 address=/#/$GATEWAY
 EOF
+    fi
+    if [[ ! -z $DHCP_HOSTS ]]; then
+        if [[ ! -f $DHCP_HOSTS ]]; then
+            echo "ERROR: IP reservation list file ${DHCP_HOSTS} not found." >&2
+            exit 1
+        fi
+        while IFS='' read -r dhcp_assignment || [[ -n "$dhcp_assignment" ]]; do
+            [[ "$dhcp_assignment" =~ ^$ ]] && continue # Skip empty lines
+            [[ "$dhcp_assignment" =~ ^#.*$ ]] && continue # Skip comment lines
+            dhcp_host_entry="$( echo "$dhcp_assignment" | sed 's/#.*$//g')" # Remove trailing comments
+            dhcp_host_entry="$( echo "$dhcp_host_entry" | sed 's/[[:space:]][[:space:]]*/,/g')" # Change column separators to commas
+            dhcp_host_entry="$( echo "$dhcp_host_entry" | sed 's/\,$//')" # Remove any trailing commas
+            echo "dhcp-host=$dhcp_host_entry" >> CONFDIR/dnsmasq.conf
+        done < "$1"
     fi
 fi
 

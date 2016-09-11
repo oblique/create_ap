@@ -1,0 +1,42 @@
+# DHCP address reservation
+
+In order to enable address reservation for selected hosts in your network, use `--dhcp-hosts <file_path>` option with a path to an address reservation file.
+
+The file should contain address reservation entries, one per line, compatible with the `dnsmasq` dhcp-host configuration option, with the exception that commas can be replaced with multiple spaces or tabs for nicer formatting.
+
+Also comments are supported either on independent lines or appended to the entry lines.
+
+Example configuration is presented below:
+
+```
+#
+# Laptops
+#
+00:1C:F0:A8:0A:11       192.168.1.100               # Alice's laptop
+00:26:BB:12:CC:22       192.168.1.101   infinite    # Bob's laptop (infite lease)
+00:26:BB:12:CC:33       192.168.1.101               # Jenny's laptop
+
+#
+# Mobiles
+#
+90:F6:52:06:65:44       192.168.1.102               # Alice's mobile
+80:1F:02:59:64:55       192.168.1.106               # Bob's mobile
+
+#
+# Other
+#
+C4:85:08:F3:A4:66       ignore                      # Disable DHCP for desktop
+```
+
+which produces the following entries in the `dnsmasq.conf`:
+
+```
+dhcp-host=00:1C:F0:A8:0A:11,192.168.1.100
+dhcp-host=00:26:BB:12:CC:22,192.168.1.101,infinite
+dhcp-host=00:26:BB:12:CC:33,192.168.1.101
+dhcp-host=90:F6:52:06:65:44,192.168.1.102
+dhcp-host=80:1F:02:59:64:55,192.168.1.106
+dhcp-host=C4:85:08:F3:A4:66,ignore
+```
+
+For more `dhcp-host` entry examples checkout [example configuration](http://oss.segetech.com/intra/srv/dnsmasq.conf).
