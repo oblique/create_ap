@@ -21,7 +21,7 @@ Example configuration is presented below:
 #
 # Mobiles
 #
-90:F6:52:06:65:44       192.168.1.103               # Alice's mobile
+90:F6:52:06:65:44       192.168.1.104               # Alice's mobile
 80:1F:02:59:64:55       192.168.1.105               # Bob's mobile
 
 #
