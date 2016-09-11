@@ -138,6 +138,9 @@ _create_ap() {
         --dhcp-dns)
             # Not going to implement
             ;;
+        --dhcp-hosts)
+            _use_filedir && return 0
+            ;;
         --mkconfig)
             _use_filedir && return 0
             ;;
