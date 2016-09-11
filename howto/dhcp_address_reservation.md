@@ -6,6 +6,8 @@ The file should contain address reservation entries, one per line, compatible wi
 
 Also comments are supported either on independent lines or appended to the entry lines.
 
+This feature should typically be used in combination with `-g` option to make sure that the assigned addresses in the configuration file are on the same network as the gateway.
+
 Example configuration is presented below:
 
 ```
@@ -39,4 +41,4 @@ dhcp-host=80:1F:02:59:64:55,192.168.1.106
 dhcp-host=C4:85:08:F3:A4:66,ignore
 ```
 
-For more `dhcp-host` entry examples checkout [example configuration](http://oss.segetech.com/intra/srv/dnsmasq.conf).
+For more `dhcp-host` entry format checkout `dnsmasq` [manpage](http://www.thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html).
