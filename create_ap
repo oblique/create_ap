@@ -584,7 +584,7 @@ networkmanager_wait_until_unmanaged() {
         networkmanager_iface_is_unmanaged "$1"
         RES=$?
         [[ $RES -eq 0 ]] && break
-        [[ $RES -eq 2 ]] && die "Interface '${1}' does not exists.
+        [[ $RES -eq 2 ]] && die "Interface '${1}' does not exist.
        It's probably renamed by a udev rule."
         sleep 1
     done
