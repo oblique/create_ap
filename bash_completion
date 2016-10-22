@@ -1,4 +1,4 @@
-# 
+#
 # Bash Completion routine for create_ap
 #
 
@@ -59,6 +59,12 @@ _create_ap() {
             # No Options
             ;;
         --hidden)
+            # No Options
+            ;;
+        --mac-filter)
+            # No Options
+            ;;
+        --mac-filter-accept)
             # No Options
             ;;
         --ieee80211n)
