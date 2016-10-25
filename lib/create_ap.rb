@@ -20,4 +20,13 @@ hostapd.add_ap ap
 
 hostapd.start
 
-loop { sleep 1 }
+Signal.trap('INT') { throw :exit_signaled }
+Signal.trap('TERM') { throw :exit_signaled }
+
+catch :exit_signaled do
+  sleep
+end
+
+puts
+puts 'Exiting...'
+hostapd.stop
