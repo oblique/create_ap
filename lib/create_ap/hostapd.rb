@@ -126,11 +126,11 @@ class Hostapd
       if ap.ieee80211 == :auto
         block = Proc.new { |x| ap.iface.ieee80211.include? x }
         if ap.channel == :auto
-          [ :ac, :n, :g, :a ].find(&block)
+          %i(ac n g a).find(&block)
         elsif ap.channel >= 1 && ap.channel <= 14
-          [ :n, :g ].find(&block)
+          %i(n g).find(&block)
         else
-          [ :ac, :n, :a ].find(&block)
+          %i(ac n a).find(&block)
         end
       else
         ap.ieee80211
@@ -153,10 +153,8 @@ class Hostapd
         end
       end
 
-    if channel.is_a? Hash
-      channel = channel[:channel]
-    end
+    channel = channel[:channel] if channel.is_a? Hash
 
-    [ ieee80211, channel ]
+    [ieee80211, channel]
   end
 end

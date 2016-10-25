@@ -64,7 +64,7 @@ class TestWifiIface < Minitest::Test
     w = MockWifiIface.new
     w.send(:parse_channels)
     w.send(:parse_ieee80211)
-    expected_result = [ :a, :g, :n, :ac ].to_set
+    expected_result = %i(a g n ac).to_set
     assert_equal w.ieee80211, expected_result
   end
 
@@ -73,7 +73,7 @@ class TestWifiIface < Minitest::Test
     w.iw_info = w.iw_info.sub(/^\s+Capabilities.*$/, '')
     w.send(:parse_channels)
     w.send(:parse_ieee80211)
-    expected_result = [ :a, :g, :ac ].to_set
+    expected_result %i(a g ac).to_set
     assert_equal w.ieee80211, expected_result
   end
 
@@ -82,7 +82,7 @@ class TestWifiIface < Minitest::Test
     w.iw_info = w.iw_info.sub(/^\s+VHT Capabilities.*$/, '')
     w.send(:parse_channels)
     w.send(:parse_ieee80211)
-    expected_result = [ :a, :g, :n ].to_set
+    expected_result = %i(a g n).to_set
     assert_equal w.ieee80211, expected_result
   end
 
@@ -91,7 +91,7 @@ class TestWifiIface < Minitest::Test
     w.iw_info = w.iw_info.sub(/^\s+Capabilities.*$/, '').sub(/^\s+VHT Capabilities.*$/, '')
     w.send(:parse_channels)
     w.send(:parse_ieee80211)
-    expected_result = [ :a, :g ].to_set
+    expected_result = %i(a g).to_set
     assert_equal w.ieee80211, expected_result
   end
 
@@ -100,7 +100,7 @@ class TestWifiIface < Minitest::Test
     w.iw_info = w.iw_info.gsub(/^\s+\* 5\d+ MHz .*$/, '')
     w.send(:parse_channels)
     w.send(:parse_ieee80211)
-    expected_result = [ :g, :n ].to_set
+    expected_result = %i(g n).to_set
     assert_equal w.ieee80211, expected_result
   end
 
@@ -109,7 +109,7 @@ class TestWifiIface < Minitest::Test
     w.iw_info = w.iw_info.gsub(/^\s+\* 2\d+ MHz .*$/, '')
     w.send(:parse_channels)
     w.send(:parse_ieee80211)
-    expected_result = [ :a, :ac ].to_set
+    expected_result = %i(a ac).to_set
     assert_equal w.ieee80211, expected_result
   end
 
@@ -134,7 +134,7 @@ class TestWifiIface < Minitest::Test
       { channel: 44, mhz: 5220 },
       { channel: 48, mhz: 5240 }
     ]
-    expected_ieee80211 = [ :a, :g, :n, :ac ].to_set
+    expected_ieee80211 = %i(a g n ac).to_set
 
     assert_equal w.allowed_channels, expected_channels
     assert_equal w.ieee80211, expected_ieee80211

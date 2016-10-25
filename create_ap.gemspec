@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.author      = 'oblique'
   s.email       = 'psyberbits@gmail.com'
   s.homepage    = 'https://github.com/oblique/create_ap'
-  s.files       = [ 'LICENSE' ] + Dir.glob('bin/**/*') + Dir.glob('lib/**/*')
+  s.files       = ['LICENSE'] + Dir.glob('bin/**/*') + Dir.glob('lib/**/*')
   s.executables = ['create_ap']
   s.platform    = 'linux'
 end

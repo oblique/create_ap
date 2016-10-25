@@ -10,7 +10,7 @@ class AccessPointOptions
     @country_code = nil
     @hidden = false
     @isolate_clients = false
-    @wpa = [ 1, 2 ]
+    @wpa = [1, 2]
     @iface = nil
   end
 
@@ -45,7 +45,7 @@ class AccessPointOptions
   end
 
   def ieee80211=(mode)
-    valid_modes = [ :a, :g, :n, :ac ]
+    valid_modes = %i(a g n ac)
     mode = mode.to_sym if mode.is_a? String
     unless valid_modes.include? mode
       raise(ArgumentError, "Invalid or unsupported 802.11 protocol: #{mode}")
@@ -54,8 +54,8 @@ class AccessPointOptions
   end
 
   def wpa=(wpa)
-    valid_versions = [ 1, 2 ]
-    wpa = [ wpa ] unless wpa.is_a? Array
+    valid_versions = [1, 2]
+    wpa = [wpa] unless wpa.is_a? Array
     wpa = wpa.uniq
     wpa.each do |x|
       raise(ArgumentError, "Invalid WPA version: #{x}") unless valid_versions.include? x
