@@ -33,6 +33,7 @@ class Subprocess
         $log.debug "[pid #{@pid}] Exit status: #{$?.exitstatus}"
       end
 
+      @pid = nil
       $?
     end
     enum.each(&block) if block_given?
