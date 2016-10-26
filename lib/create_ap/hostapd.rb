@@ -38,7 +38,7 @@ class Hostapd
 
   def stop
     Process.kill('TERM', @process.pid) if @process&.pid
-    @threadi&.join
+    @thread&.join
     @thread = nil
     @process = nil
   end
