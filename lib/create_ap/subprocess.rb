@@ -1,4 +1,5 @@
 require 'pty'
+require 'create_ap/log'
 
 class Subprocess
   attr_reader :pid, :exe
@@ -12,7 +13,7 @@ class Subprocess
       end
     @exe = File.basename(exe)
     @r, @w, @pid = PTY.spawn(*args)
-    $log.debug "[pid #{@pid}] Running: #{arr_to_cmd_str(*args)}"
+    Log::debug "[pid #{@pid}] Running: #{arr_to_cmd_str(*args)}"
   end
 
   def each(&block)
@@ -28,9 +29,9 @@ class Subprocess
 
       if $?.signaled?
         signame = 'SIG' << Signal.signame($?.termsig)
-        $log.debug "[pid #{@pid}] Killed with #{signame}"
+        Log::debug "[pid #{@pid}] Killed with #{signame}"
       else
-        $log.debug "[pid #{@pid}] Exit status: #{$?.exitstatus}"
+        Log::debug "[pid #{@pid}] Exit status: #{$?.exitstatus}"
       end
 
       @pid = nil

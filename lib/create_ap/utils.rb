@@ -1,4 +1,5 @@
 require 'create_ap/subprocess'
+require 'create_ap/log'
 
 module Utils
   def Utils.run(*args)
@@ -7,7 +8,7 @@ module Utils
       if block_given?
         yield line
       else
-        $log.info "#{p.exe}[#{p.pid}]: #{line}"
+        Log::info "#{p.exe}[#{p.pid}]: #{line}"
       end
     end
     status&.exitstatus == 0

@@ -1,4 +1,5 @@
 require 'create_ap/subprocess'
+require 'create_ap/log'
 
 class Hostapd
   def initialize(phy)
@@ -22,7 +23,7 @@ class Hostapd
 
   def start
     if @process
-      $log.debug 'hostapd is already running'
+      Log::debug 'hostapd is already running'
       return nil
     end
 
@@ -30,7 +31,7 @@ class Hostapd
     @process = Subprocess.new('hostapd', '/tmp/hostapd.conf')
     @thread = Thread.new do
       @process.each do |line|
-        $log.info "#{@process.exe}[#{@process.pid}]: #{line}"
+        Log::info "#{@process.exe}[#{@process.pid}]: #{line}"
       end
     end
   end
