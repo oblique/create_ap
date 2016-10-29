@@ -5,7 +5,7 @@ class Hostapd
   def initialize(phy)
     @ap = []
     @phy = phy
-    @threads = nil
+    @thread = nil
     @process = nil
     @conf = "#{CONF_DIR}/hostapd_#{@phy}.conf"
     @ctrl = "#{CONF_DIR}/hostapd_#{@phy}_ctrl"
