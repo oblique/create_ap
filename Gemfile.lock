@@ -1,0 +1,19 @@
+PATH
+  remote: .
+  specs:
+    create_ap (1.0.0.dev)
+      ipaddress (~> 0.8)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    ipaddress (0.8.3)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  create_ap!
+
+BUNDLED WITH
+   1.13.6

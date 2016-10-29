@@ -9,4 +9,6 @@ Gem::Specification.new do |s|
   s.files       = ['LICENSE'] + Dir.glob('bin/**/*') + Dir.glob('lib/**/*')
   s.executables = ['create_ap']
   s.platform    = 'linux'
+
+  s.add_dependency('ipaddress', '~> 0.8')
 end
