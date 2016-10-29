@@ -7,6 +7,8 @@ class Hostapd
     @phy = phy
     @threads = nil
     @process = nil
+    @conf = "#{CONF_DIR}/hostapd_#{@phy}.conf"
+    @ctrl = "#{CONF_DIR}/hostapd_#{@phy}_ctrl"
   end
 
   def add_ap(ap)
@@ -28,7 +30,7 @@ class Hostapd
     end
 
     write_config
-    @process = Subprocess.new('hostapd', '/tmp/hostapd.conf')
+    @process = Subprocess.new('hostapd', @conf)
     @thread = Thread.new do
       @process.each do |line|
         Log::info "#{@process.exe}[#{@process.pid}]: #{line}"
@@ -51,8 +53,7 @@ class Hostapd
   private
 
   def write_config
-    # TODO: change path
-    open('/tmp/hostapd.conf', 'w') do |f|
+    open(@conf, 'w') do |f|
       @ap.each do |ap|
         ieee80211, channel = resolve_auto(ap)
         f.puts "interface=#{ap.iface.ifname}"
@@ -110,11 +111,10 @@ class Hostapd
 
         f.puts 'ignore_broadcast_ssid=1' if ap.hidden
         f.puts 'ap_isolate=1' if ap.isolate_clients
-        # TODO: change path of ctrl_interface
         f.puts <<~END
         preamble=1
         beacon_int=100
-        ctrl_interface=/tmp/hostapd_ctrl
+        ctrl_interface=#{@ctrl}
         ctrl_interface_group=0
         driver=nl80211
         END
