@@ -8,12 +8,17 @@ GEM
   remote: https://rubygems.org/
   specs:
     ipaddress (0.8.3)
+    minitest (5.9.1)
+    rake (10.5.0)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
+  bundler (~> 1.13)
   create_ap!
+  minitest (~> 5.0)
+  rake (~> 10.0)
 
 BUNDLED WITH
    1.13.6

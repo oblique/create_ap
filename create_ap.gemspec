@@ -10,5 +10,9 @@ Gem::Specification.new do |s|
   s.executables = ['create_ap']
   s.platform    = 'linux'
 
-  s.add_dependency('ipaddress', '~> 0.8')
+  s.add_development_dependency "bundler", "~> 1.13"
+  s.add_development_dependency "rake", "~> 10.0"
+  s.add_development_dependency "minitest", "~> 5.0"
+
+  s.add_dependency 'ipaddress', '~> 0.8'
 end
