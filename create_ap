@@ -14,7 +14,7 @@
 #    dnsmasq
 #    iptables
 
-VERSION=0.4.2
+VERSION=0.4.3
 PROGNAME="$(basename $0)"
 
 # make sure that all command outputs are in english
