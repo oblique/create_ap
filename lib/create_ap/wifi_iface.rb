@@ -22,12 +22,12 @@ module CreateAp
         raise "Unable to get the physical interface of '#{ifname}'"
       end
 
-      @iw_info = `iw phy #{phy} info 2>&1`
-      if !$?.success? || @iw_info.empty?
+      iw_info = `iw phy #{phy} info 2>&1`
+      if !$?.success? || iw_info.empty?
         raise "Unable to get information about '#{ifname}'"
       end
 
-      parse_iw_info
+      parse_iw_info(iw_info)
 
       @support_auto_channel = !`iw dev #{ifname} survey dump`.empty? && $?.success?
     end
@@ -38,15 +38,15 @@ module CreateAp
 
     private
 
-    def parse_iw_info
-      parse_channels
-      parse_ieee80211
+    def parse_iw_info(iw_info)
+      parse_channels(iw_info)
+      parse_ieee80211(iw_info)
     end
 
-    def parse_channels
+    def parse_channels(iw_info)
       @allowed_channels = []
       # parse frequency table
-      @iw_info.scan(/\* (\d+) MHz \[(\d+)\] (\(.*\))/) do |x|
+      iw_info.scan(/\* (\d+) MHz \[(\d+)\] (\(.*\))/) do |x|
         # frequencies that have 'no IR' or 'disable' can not be used for
         # transmission
         next if x[2] =~ /no IR|disable/
@@ -58,7 +58,7 @@ module CreateAp
       end
     end
 
-    def parse_ieee80211
+    def parse_ieee80211(iw_info)
       @ieee80211 = Set.new
       @allowed_channels.each do |x|
         case x[:mhz] / 1000
@@ -71,7 +71,7 @@ module CreateAp
 
       if @ieee80211.include? :g
         # if adapter has HT capabilities then it supports N
-        @iw_info.scan(/^\s+Capabilities: (0x\h+).*?^\s+\* (\d+) MHz \[\d+\]/m) do |x|
+        iw_info.scan(/^\s+Capabilities: (0x\h+).*?^\s+\* (\d+) MHz \[\d+\]/m) do |x|
           cap = x[0].to_i(16)
           mhz = x[1].to_i
           @ieee80211 << :n if cap != 0 && mhz / 1000 == 2
@@ -80,7 +80,7 @@ module CreateAp
 
       if @ieee80211.include? :a
         # If adapter has VHT capabilities then it supports AC.
-        @iw_info.scan(/^\s+VHT Capabilities \((0x\h+)\).*?^\s+\* (\d+) MHz \[\d+\]/m) do |x|
+        iw_info.scan(/^\s+VHT Capabilities \((0x\h+)\).*?^\s+\* (\d+) MHz \[\d+\]/m) do |x|
           cap = x[0].to_i(16)
           mhz = x[1].to_i
           @ieee80211 << :ac if cap != 0 && mhz / 1000 == 5
