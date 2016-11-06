@@ -3,6 +3,7 @@ PATH
   specs:
     create_ap (1.0.0.dev)
       ipaddress (~> 0.8)
+      safe_yaml (~> 1.0)
 
 GEM
   remote: https://rubygems.org/
@@ -10,6 +11,7 @@ GEM
     ipaddress (0.8.3)
     minitest (5.9.1)
     rake (10.5.0)
+    safe_yaml (1.0.4)
 
 PLATFORMS
   ruby

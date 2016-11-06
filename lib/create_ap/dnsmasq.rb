@@ -1,18 +1,11 @@
 module CreateAp
   class Dnsmasq
-    def initialize
-      @networks = []
-      @conf = "#{CONF_DIR}/dnsmasq.conf"
-      @lease_file = "#{CONF_DIR}/dhcp.leases"
+    def initialize(config)
+      @config = config
+      @conf = "#{TMP_DIR}/dnsmasq.conf"
+      @lease_file = "#{TMP_DIR}/dhcp.leases"
       @thread = nil
       @process = nil
-    end
-
-    def add_network(network)
-      unless network.is_a? NetworkOptions
-        raise(ArgumentError, "Invalid type, expected NetworkOptions")
-      end
-      @networks << network
     end
 
     def start
@@ -57,11 +50,11 @@ module CreateAp
         server=/lan/
         dhcp-leasefile=#{@lease_file}
         END
-        @networks.each_with_index do |n, idx|
+        @config.networks.each do |name, n|
           f.puts <<~END
-          dhcp-range=net#{idx},#{n.host_min},#{n.host_max},#{n.netmask},24h
-          dhcp-option-force=net#{idx},option:router,#{n.gateway}
-          dhcp-option-force=net#{idx},option:dns-server,#{n.dns.join(',')}
+          dhcp-range=#{name},#{n.host_min},#{n.host_max},#{n.netmask},24h
+          dhcp-option-force=#{name},option:router,#{n.gateway}
+          dhcp-option-force=#{name},option:dns-server,#{n.dns.join(',')}
           END
         end
       end

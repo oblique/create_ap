@@ -1,18 +1,18 @@
 module CreateAp
   class AccessPointOptions
-    attr_reader :ssid, :passphrase, :channel, :ieee80211, :wpa
-    attr_accessor :iface, :country_code, :hidden, :isolate_clients
+    attr_reader :ssid, :passphrase, :channel, :ieee80211, :wpa, :network
+    attr_accessor :iface, :hidden, :isolate_clients
 
     def initialize(ssid, passphrase = nil)
       self.ssid = ssid
       self.passphrase = passphrase
       @channel = :auto
       @ieee80211 = :auto
-      @country_code = nil
       @hidden = false
       @isolate_clients = false
       @wpa = [1, 2]
       @iface = nil
+      @network = 'default'
     end
 
     def ssid=(ssid)
@@ -34,6 +34,7 @@ module CreateAp
     end
 
     def channel=(ch)
+      ch ||= :auto
       @channel =
         if ch == :auto || ch == 'auto' || ch == 0
           :auto
@@ -46,7 +47,8 @@ module CreateAp
     end
 
     def ieee80211=(mode)
-      valid_modes = %i(a g n ac)
+      mode ||= :auto
+      valid_modes = %i(auto a g n ac)
       mode = mode.to_sym if mode.is_a? String
       unless valid_modes.include? mode
         raise(ArgumentError, "Invalid or unsupported 802.11 protocol: #{mode}")
@@ -55,6 +57,7 @@ module CreateAp
     end
 
     def wpa=(wpa)
+      wpa ||= [1, 2]
       valid_versions = [1, 2]
       wpa = [wpa] unless wpa.is_a? Array
       wpa = wpa.uniq
@@ -62,6 +65,10 @@ module CreateAp
         raise(ArgumentError, "Invalid WPA version: #{x}") unless valid_versions.include? x
       end
       @wpa = wpa
+    end
+
+    def network=(network)
+      @network = network || 'default'
     end
   end
 end

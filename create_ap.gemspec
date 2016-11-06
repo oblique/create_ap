@@ -22,4 +22,5 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'minitest', '~> 5.0'
 
   s.add_dependency 'ipaddress', '~> 0.8'
+  s.add_dependency 'safe_yaml', '~> 1.0'
 end

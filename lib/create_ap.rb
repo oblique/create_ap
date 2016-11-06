@@ -5,10 +5,10 @@ require 'create_ap/access_point'
 require 'create_ap/wifi_iface'
 require 'create_ap/network'
 require 'create_ap/dnsmasq'
-require 'create_ap/firewall'
+require 'create_ap/config'
 
 module CreateAp
-  CONF_DIR =
+  TMP_DIR =
     if Dir.exist? '/run'
       '/run/create_ap'
     elsif Dir.exist? '/var/run'
@@ -16,6 +16,8 @@ module CreateAp
     else
       '/tmp/create_ap'
     end
+
+  YAML_CONF_FILE = 'create_ap.yml'
 
   Log = Logger.new(STDOUT)
   Log.level = Logger::INFO
@@ -25,32 +27,19 @@ module CreateAp
   end
 
   def self.main
-    FileUtils.remove_dir CONF_DIR if Dir.exist? CONF_DIR
-    Dir.mkdir CONF_DIR
+    FileUtils.remove_dir TMP_DIR if Dir.exist? TMP_DIR
+    Dir.mkdir TMP_DIR
 
-    network = NetworkOptions.new '192.168.12.1'
-    ap = AccessPointOptions.new 'myap', 'passphrase'
-    ap.iface = WifiIface.new 'wlan1'
+    config = Config.new(YAML_CONF_FILE)
+    dnsmasq = Dnsmasq.new(config)
+    networkctl = NetworkCtl.new(config)
+    hostapd = Hostapd.new(config)
 
-    hostapd = Hostapd.new ap.iface.phy
-    dnsmasq = Dnsmasq.new
-    firewall = Firewall.new
+    networkctl.allow_tcp_port(53)
+    networkctl.allow_udp_port(53)
+    networkctl.allow_udp_port(67)
 
-    hostapd.add_ap ap
-    dnsmasq.add_network network
-
-    firewall.add_nat(network, ap.iface.ifname)
-    firewall.allow_tcp_port(53)
-    firewall.allow_udp_port(53)
-    firewall.allow_udp_port(67)
-    firewall.apply
-
-    # set ip
-    ifname = ap.iface.ifname
-    `ip link set down dev #{ifname}`
-    `ip addr flush #{ifname}`
-    `ip addr add #{network.gateway}/#{network.netmask} broadcast #{network.broadcast} dev #{ifname}`
-
+    networkctl.reload
     dnsmasq.start
     hostapd.start
 
@@ -66,12 +55,6 @@ module CreateAp
 
     hostapd.stop
     dnsmasq.stop
-
-    # disable nat and remove fw rules
-    firewall.reset
-
-    # unset ip
-    `ip link set down dev #{ifname}`
-    `ip addr flush #{ifname}`
+    networkctl.reset
   end
 end

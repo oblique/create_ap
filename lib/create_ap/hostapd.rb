@@ -2,13 +2,45 @@ require 'create_ap/subprocess'
 
 module CreateAp
   class Hostapd
+    def initialize(config)
+      @config = config
+      @hostapd_proc = {}
+    end
+
+    def start
+      @config.access_points.group_by{ |k, v| v.iface.phy }.each do |phy, aps|
+        @hostapd_proc[phy] = HostapdProcess.new(phy)
+        aps.each do |name, ap|
+          @hostapd_proc[phy].add_ap(ap)
+        end
+      end
+
+      @hostapd_proc.each do |k, hostapd|
+        hostapd.start
+      end
+    end
+
+    def stop
+      @hostapd_proc.each do |k, hostapd|
+        hostapd.stop
+      end
+      @hostapd_proc.clear
+    end
+
+    def restart
+      stop
+      start
+    end
+  end
+
+  class HostapdProcess
     def initialize(phy)
       @ap = []
       @phy = phy
       @thread = nil
       @process = nil
-      @conf = "#{CONF_DIR}/hostapd_#{@phy}.conf"
-      @ctrl = "#{CONF_DIR}/hostapd_#{@phy}_ctrl"
+      @conf = "#{TMP_DIR}/hostapd_#{@phy}.conf"
+      @ctrl = "#{TMP_DIR}/hostapd_#{@phy}_ctrl"
     end
 
     def add_ap(ap)
@@ -61,10 +93,14 @@ module CreateAp
           # f.puts "bssid=..."
           f.puts "ssid=#{ap.ssid}"
           f.puts "channel=#{channel}"
+          f.puts "bridge=br-ap-#{ap.network}"
 
           # TODO: add country code
           # f.puts 'country_code=...'
           # f.puts 'ieee80211d=1'
+
+          Log.info "Using 802.11#{ieee80211}"
+          Log.info "Using channel #{channel == 0 ? 'auto' : channel}"
 
           case ieee80211
           when :a

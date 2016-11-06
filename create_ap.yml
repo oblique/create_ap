@@ -1,0 +1,9 @@
+ap:
+    myap:
+        ssid: MyAP
+        passphrase: MyPassphrase
+        interface: wlan1
+    myap2:
+        ssid: MyAP2
+        passphrase: MyPassphrase
+        interface: wlan2
