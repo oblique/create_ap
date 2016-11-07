@@ -68,6 +68,7 @@ module CreateAp
     end
 
     def network_reload
+      network_reset
       @config.networks.each do |name, network|
         gateway_cidr = "#{network.gateway}/#{network.netmask}"
         br_name = "br-ap-#{name}"
