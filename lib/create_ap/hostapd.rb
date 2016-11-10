@@ -8,6 +8,8 @@ module CreateAp
     end
 
     def start
+      remove_all_virt_ifaces
+
       @config.access_points.group_by{ |k, v| v.iface.phy }.each do |phy, aps|
         @hostapd_proc[phy] = HostapdProcess.new(phy)
         aps.each do |name, ap|
@@ -25,11 +27,23 @@ module CreateAp
         hostapd.stop
       end
       @hostapd_proc.clear
+      remove_all_virt_ifaces
     end
 
     def restart
       stop
       start
+    end
+
+    private
+
+    def remove_all_virt_ifaces
+      # all our virtual interfaces have the following pattern: ifname-number
+      # e.g. wlan0-1
+      Dir.glob('/sys/class/net/*-*/wireless').each do |x|
+        iface = x.split('/')[-2]
+        CreateAp::run("iw dev #{iface} del > /dev/null 2>&1")
+      end
     end
   end
 
@@ -40,7 +54,7 @@ module CreateAp
       @thread = nil
       @process = nil
       @conf = "#{TMP_DIR}/hostapd_#{@phy}.conf"
-      @ctrl = "#{TMP_DIR}/hostapd_#{@phy}_ctrl"
+      @ctrl = "#{TMP_DIR}/hostapd"
     end
 
     def add_ap(ap)
@@ -86,49 +100,63 @@ module CreateAp
 
     def write_config
       open(@conf, 'w') do |f|
-        @ap.each do |ap|
-          ieee80211, channel = resolve_auto(ap)
-          f.puts "interface=#{ap.iface.ifname}"
-          # TODO: add mac
-          # f.puts "bssid=..."
-          f.puts "ssid=#{ap.ssid}"
-          f.puts "channel=#{channel}"
-          f.puts "bridge=br-ap-#{ap.network}"
+        ieee80211, channel = resolve_auto
+        Log.info "Using 802.11#{ieee80211}"
+        Log.info "Using channel #{channel == 0 ? 'auto' : channel}"
 
-          # TODO: add country code
-          # f.puts 'country_code=...'
-          # f.puts 'ieee80211d=1'
+        f.puts <<~END
+        driver=nl80211
+        ctrl_interface=#{@ctrl}
+        ctrl_interface_group=0
+        channel=#{channel}
+        END
+        # TODO: add country code
+        # f.puts 'country_code=...'
+        # f.puts 'ieee80211d=1'
 
-          Log.info "Using 802.11#{ieee80211}"
-          Log.info "Using channel #{channel == 0 ? 'auto' : channel}"
+        case ieee80211
+        when :a, :ac
+          f.puts 'hw_mode=a'
+        when :g
+          f.puts 'hw_mode=g'
+        when :n
+          # on auto channel (i.e. 0) prefer 5 GHz if available
+          is_band_5 = channel >= 36 ||
+            (channel == 0 && ap.iface.allowed_channels.find { |x| x[:mhz] / 1000 == 5 })
+          f.puts "hw_mode=#{is_band_5 ? 'a' : 'g'}"
+        end
 
-          case ieee80211
-          when :a
-            f.puts 'hw_mode=a'
-          when :g
-            f.puts 'hw_mode=g'
-          when :n
-            # on auto channel (i.e. 0) prefer 5 GHz if available
-            is_band_5 = channel >= 36 ||
-              (channel == 0 && ap.iface.allowed_channels.find { |x| x[:mhz] / 1000 == 5 })
+        @ap.each_with_index do |ap, idx|
+          iface = ap.iface.mk_virt_iface
+          bridge = "br-ap-#{ap.network}"
+          bssid = CreateAp::mac(bridge)
 
+          f.puts
+          if idx == 0
+            f.puts "interface=#{iface}"
+          else
+            f.puts "bss=#{iface}"
+          end
+
+          f.puts <<~END
+          bssid=#{bssid}
+          ssid=#{ap.ssid}
+          bridge=#{bridge}
+          END
+
+          if ieee80211 == :n || ieee80211 == :ac
             f.puts <<~END
-            hw_mode=#{is_band_5 ? 'a' : 'g'}
             ieee80211n=1
             wmm_enabled=1
             ht_capab=[HT40+]
             END
-          when :ac
+          end
+
+          if ieee80211 == :ac
             # TODO: enable this when ieee80211d is enabled
             # f.puts 'ieee80211h=1'
             # TODO: check vht_capab
-            f.puts <<~END
-            hw_mode=a
-            ieee80211n=1
-            ieee80211ac=1
-            wmm_enabled=1
-            ht_capab=[HT40+]
-            END
+            f.puts 'ieee80211ac=1'
           end
 
           if ap.passphrase
@@ -147,52 +175,67 @@ module CreateAp
 
           f.puts 'ignore_broadcast_ssid=1' if ap.hidden
           f.puts 'ap_isolate=1' if ap.isolate_clients
-          f.puts <<~END
-          preamble=1
-          beacon_int=100
-          ctrl_interface=#{@ctrl}
-          ctrl_interface_group=0
-          driver=nl80211
-          END
+          f.puts 'preamble=1'
         end
       end
     end
 
-    def resolve_auto(ap)
-      ieee80211 =
-        if ap.ieee80211 == :auto
-          block = Proc.new { |x| ap.iface.ieee80211.include? x }
-          if ap.channel == :auto
-            %i(ac n g a).find(&block)
-          elsif ap.channel >= 1 && ap.channel <= 14
-            %i(n g).find(&block)
-          else
-            %i(ac n a).find(&block)
-          end
-        else
-          ap.ieee80211
-        end
+    def resolve_auto
+      iface = @ap.first.iface
 
-      channel =
-        if ap.channel == :auto
-          if ap.iface.support_auto_channel?
-            0
-          else
-            case ieee80211
-            when :a, :ac
-              ap.iface.allowed_channels.find { |x| x[:mhz] / 1000 == 5 }
-            when :g
-              ap.iface.allowed_channels.find { |x| x[:mhz] / 1000 == 2 }
-            when :n
-              ap.iface.allowed_channels.find { |x| x[:mhz] / 1000 == 5 } ||
-                ap.iface.allowed_channels.find { |x| x[:mhz] / 1000 == 2 }
-            end
-          end
-        end
+      # get all ieee80211 options and select the best one
+      ieee80211_arr = @ap.map{ |x| x.ieee80211 }.uniq
+      ieee80211 = %i(ac n g a).find{ |x| ieee80211_arr.include?(x) && iface.ieee80211.include?(x) }
+      ieee80211 ||= :auto
 
-      channel = channel[:channel] if channel.is_a? Hash
+      # get all channels and select the best one (prefer 5ghz over 2.4ghz)
+      channel_arr = @ap.map{ |x| x.channel }.uniq.select{ |x| x.is_a? Integer }
+      if %i(ac n a auto).include? ieee80211
+        channel = channel_arr.find { |x| x >= 36 && iface.allowed_channels.include?(x) }
+      end
+      if %i(n g auto).include? ieee80211
+        channel ||= channel_arr.find{ |x| x <= 14 && iface.allowed_channels.include?(x) }
+      end
+      channel ||= :auto
+
+      ieee80211 = resolve_auto_ieee80211(ieee80211, channel)
+      channel = resolve_auto_channel(ieee80211, channel)
 
       [ieee80211, channel]
+    end
+
+    def resolve_auto_ieee80211(ieee80211, channel)
+      return ieee80211 unless ieee80211 == :auto
+
+      iface = @ap.first.iface
+
+      block = Proc.new { |x| iface.ieee80211.include? x }
+      if channel == :auto
+        %i(ac n g a).find(&block)
+      elsif channel >= 1 && channel <= 14
+        %i(n g).find(&block)
+      else
+        %i(ac n a).find(&block)
+      end
+    end
+
+    def resolve_auto_channel(ieee80211, channel)
+      return channel unless channel == :auto
+
+      iface = @ap.first.iface
+      return 0 if iface.support_auto_channel?
+
+      channel =
+        case ieee80211
+        when :a, :ac
+          iface.allowed_channels.find{ |x| x[:mhz] / 1000 == 5 }
+        when :g
+          iface.allowed_channels.find{ |x| x[:mhz] / 1000 == 2 }
+        when :n
+          iface.allowed_channels.find{ |x| x[:mhz] / 1000 == 5 } ||
+            iface.allowed_channels.find{ |x| x[:mhz] / 1000 == 2 }
+        end
+      channel[:channel] if channel
     end
   end
 end

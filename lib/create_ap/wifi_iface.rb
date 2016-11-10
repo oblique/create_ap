@@ -36,6 +36,24 @@ module CreateAp
       @support_auto_channel
     end
 
+    def mac
+      CreateAp::mac(@ifname)
+    end
+
+    def mk_virt_iface
+      ifname = @ifname[/([^-]+)/]
+      virt = nil
+
+      1.upto(255) do |x|
+        virt = "#{ifname}-#{x}"
+        next if CreateAp::iface? virt
+        CreateAp::run("iw phy #{phy} interface add #{virt} type __ap")
+        return virt
+      end
+
+      nil
+    end
+
     private
 
     def parse_iw_info(iw_info)

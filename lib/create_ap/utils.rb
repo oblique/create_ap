@@ -20,4 +20,24 @@ module CreateAp
     end
     nil
   end
+
+  def self.cat(file)
+    open(file) { |f| f.read }
+  end
+
+  def self.mac(iface)
+    cat("/sys/class/net/#{iface}/address").chop rescue nil
+  end
+
+  def self.all_mac
+    macs = []
+    Dir.glob('/sys/class/net/*/address') do |x|
+      macs << cat(x).chop rescue next
+    end
+    macs
+  end
+
+  def self.iface?(ifname)
+    File.exist? "/sys/class/net/#{ifname}"
+  end
 end
