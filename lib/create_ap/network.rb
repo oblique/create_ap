@@ -63,6 +63,7 @@ module CreateAp
     end
 
     def reload
+      workaround_networkmanager
       network_reload
       firewall_reload
     end
@@ -172,6 +173,32 @@ module CreateAp
         iptables("-N #{chain}")
         iptables_insert("#{x} -j #{chain}")
       end
+    end
+
+    def workaround_networkmanager
+      return if CreateAp::which('udevadm').empty?
+
+      open('/etc/udev/rules.d/86-create_ap.rules', 'w') do |f|
+        f.puts <<~'END'
+        SUBSYSTEM!="net", GOTO="create_ap-end"
+        ACTION!="add|change", GOTO="create_ap-end"
+
+        ENV{INTERFACE}=="br-ap-*", ENV{NM_UNMANAGED}="1"
+        END
+
+        # TODO: if interface does not support virtual interfaces make it also
+        # unmanaged
+        @config.access_points.map{ |x| x.last.iface.ifname }.uniq.each do |iface|
+          f.puts %Q(ENV{INTERFACE}=="#{iface}-*", ENV{NM_UNMANAGED}="1")
+        end
+
+        f.puts 'LABEL="create_ap-end"'
+      end
+
+      CreateAp::run('udevadm control --reload')
+      CreateAp::run('udevadm trigger -s net')
+      # TODO: to make NetworkManager to set the non-virtual device to unmanage
+      # we need to delete it and readd it
     end
   end
 end
