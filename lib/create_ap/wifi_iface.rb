@@ -87,12 +87,14 @@ module CreateAp
         end
       end
 
-      if @ieee80211.include? :g
+      # N is in both, 2.4ghz and 5ghz
+      unless @ieee80211.empty?
         # if adapter has HT capabilities then it supports N
         iw_info.scan(/^\s+Capabilities: (0x\h+).*?^\s+\* (\d+) MHz \[\d+\]/m) do |x|
           cap = x[0].to_i(16)
           mhz = x[1].to_i
-          @ieee80211 << :n if cap != 0 && mhz / 1000 == 2
+          band = mhz / 1000
+          @ieee80211 << :n if cap != 0 && [2, 5].include?(band)
         end
       end
 
@@ -101,7 +103,8 @@ module CreateAp
         iw_info.scan(/^\s+VHT Capabilities \((0x\h+)\).*?^\s+\* (\d+) MHz \[\d+\]/m) do |x|
           cap = x[0].to_i(16)
           mhz = x[1].to_i
-          @ieee80211 << :ac if cap != 0 && mhz / 1000 == 5
+          band = mhz / 1000
+          @ieee80211 << :ac if cap != 0 && band == 5
         end
       end
     end
