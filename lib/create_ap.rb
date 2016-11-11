@@ -8,15 +8,14 @@ require 'create_ap/dnsmasq'
 require 'create_ap/config'
 
 module CreateAp
-  TMP_DIR =
+  RUN_PATH =
     if Dir.exist? '/run'
-      '/run/create_ap'
+      '/run'
     elsif Dir.exist? '/var/run'
-      '/var/run/create_ap'
-    else
-      '/tmp/create_ap'
+      '/var/run'
     end
 
+  TMP_DIR = "#{RUN_PATH}/create_ap"
   YAML_CONF_FILE = 'create_ap.yml'
 
   Log = Logger.new(STDOUT)
@@ -28,7 +27,7 @@ module CreateAp
 
   def self.main
     FileUtils.remove_dir TMP_DIR if Dir.exist? TMP_DIR
-    Dir.mkdir TMP_DIR
+    FileUtils.mkpath TMP_DIR
 
     config = Config.new(YAML_CONF_FILE)
     dnsmasq = Dnsmasq.new(config)

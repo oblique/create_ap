@@ -177,8 +177,11 @@ module CreateAp
 
     def workaround_networkmanager
       return if CreateAp::which('udevadm').empty?
+      return unless Dir.exist? "#{RUN_PATH}/udev"
 
-      open('/etc/udev/rules.d/86-create_ap.rules', 'w') do |f|
+      FileUtils.mkpath("#{RUN_PATH}/udev/rules.d")
+
+      open("#{RUN_PATH}/udev/rules.d/create_ap.rules", 'w') do |f|
         f.puts <<~'END'
         SUBSYSTEM!="net", GOTO="create_ap-end"
         ACTION!="add|change", GOTO="create_ap-end"
