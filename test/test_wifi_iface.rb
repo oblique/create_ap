@@ -5,7 +5,7 @@ module CreateAp
   class TestWifiIface < Minitest::Test
     def test_1_parse_channels
       w = MockWifiIface.new
-      w.send(:parse_channels)
+      w.send(:parse_channels, w.iw_info)
       expected_result = [
         { channel: 1,  mhz: 2412 },
         { channel: 2,  mhz: 2417 },
@@ -24,13 +24,13 @@ module CreateAp
         { channel: 44, mhz: 5220 },
         { channel: 48, mhz: 5240 }
       ]
-      assert_equal w.allowed_channels, expected_result
+      assert_equal expected_result, w.allowed_channels
     end
 
     def test_2_parse_channels
       w = MockWifiIface.new
       w.iw_info = w.iw_info.gsub(/^\s+\* 5\d+ MHz .*$/, '')
-      w.send(:parse_channels)
+      w.send(:parse_channels, w.iw_info)
       expected_result = [
         { channel: 1,  mhz: 2412 },
         { channel: 2,  mhz: 2417 },
@@ -45,78 +45,96 @@ module CreateAp
         { channel: 11, mhz: 2462 },
         { channel: 12, mhz: 2467 }
       ]
-      assert_equal w.allowed_channels, expected_result
+      assert_equal expected_result, w.allowed_channels
     end
 
     def test_3_parse_channels
       w = MockWifiIface.new
       w.iw_info = w.iw_info.gsub(/^\s+\* 2\d+ MHz .*$/, '')
-      w.send(:parse_channels)
+      w.send(:parse_channels, w.iw_info)
       expected_result = [
         { channel: 36, mhz: 5180 },
         { channel: 40, mhz: 5200 },
         { channel: 44, mhz: 5220 },
         { channel: 48, mhz: 5240 }
       ]
-      assert_equal w.allowed_channels, expected_result
+      assert_equal expected_result, w.allowed_channels
     end
 
     def test_1_parse_ieee80211
       w = MockWifiIface.new
-      w.send(:parse_channels)
-      w.send(:parse_ieee80211)
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
       expected_result = %i(a g n ac).to_set
-      assert_equal w.ieee80211, expected_result
+      assert_equal expected_result, w.ieee80211
     end
 
     def test_2_parse_ieee80211
       w = MockWifiIface.new
       w.iw_info = w.iw_info.sub(/^\s+Capabilities.*$/, '')
-      w.send(:parse_channels)
-      w.send(:parse_ieee80211)
-      expected_result = %i(a g ac).to_set
-      assert_equal w.ieee80211, expected_result
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
+      expected_result = %i(a g n ac).to_set
+      assert_equal expected_result, w.ieee80211
     end
 
     def test_3_parse_ieee80211
       w = MockWifiIface.new
       w.iw_info = w.iw_info.sub(/^\s+VHT Capabilities.*$/, '')
-      w.send(:parse_channels)
-      w.send(:parse_ieee80211)
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
       expected_result = %i(a g n).to_set
-      assert_equal w.ieee80211, expected_result
+      assert_equal expected_result, w.ieee80211
     end
 
     def test_4_parse_ieee80211
       w = MockWifiIface.new
       w.iw_info = w.iw_info.sub(/^\s+Capabilities.*$/, '').sub(/^\s+VHT Capabilities.*$/, '')
-      w.send(:parse_channels)
-      w.send(:parse_ieee80211)
-      expected_result = %i(a g).to_set
-      assert_equal w.ieee80211, expected_result
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
+      expected_result = %i(a g n).to_set
+      assert_equal expected_result, w.ieee80211
     end
 
     def test_5_parse_ieee80211
       w = MockWifiIface.new
       w.iw_info = w.iw_info.gsub(/^\s+\* 5\d+ MHz .*$/, '')
-      w.send(:parse_channels)
-      w.send(:parse_ieee80211)
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
       expected_result = %i(g n).to_set
-      assert_equal w.ieee80211, expected_result
+      assert_equal expected_result, w.ieee80211
     end
 
     def test_6_parse_ieee80211
       w = MockWifiIface.new
       w.iw_info = w.iw_info.gsub(/^\s+\* 2\d+ MHz .*$/, '')
-      w.send(:parse_channels)
-      w.send(:parse_ieee80211)
-      expected_result = %i(a ac).to_set
-      assert_equal w.ieee80211, expected_result
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
+      expected_result = %i(a n ac).to_set
+      assert_equal expected_result, w.ieee80211
+    end
+
+    def test_7_parse_ieee80211
+      w = MockWifiIface.new
+      w.iw_info = w.iw_info.gsub(/^\s+Capabilities.*$/, '')
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
+      expected_result = %i(a g ac).to_set
+      assert_equal expected_result, w.ieee80211
+    end
+
+    def test_8_parse_ieee80211
+      w = MockWifiIface.new
+      w.iw_info = w.iw_info.gsub(/^\s+Capabilities.*$/, '').sub(/^\s+VHT Capabilities.*$/, '')
+      w.send(:parse_channels, w.iw_info)
+      w.send(:parse_ieee80211, w.iw_info)
+      expected_result = %i(a g).to_set
+      assert_equal expected_result, w.ieee80211
     end
 
     def test_parse_iw_info
       w = MockWifiIface.new
-      w.send(:parse_iw_info)
+      w.send(:parse_iw_info, w.iw_info)
       expected_channels = [
         { channel: 1,  mhz: 2412 },
         { channel: 2,  mhz: 2417 },
@@ -137,8 +155,8 @@ module CreateAp
       ]
       expected_ieee80211 = %i(a g n ac).to_set
 
-      assert_equal w.allowed_channels, expected_channels
-      assert_equal w.ieee80211, expected_ieee80211
+      assert_equal expected_channels, w.allowed_channels
+      assert_equal expected_ieee80211, w.ieee80211
     end
   end
 end

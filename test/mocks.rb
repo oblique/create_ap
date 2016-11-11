@@ -6,6 +6,7 @@ module CreateAp
     attr_accessor :iw_info
 
     def initialize
+      @phy = 'phy0'
       @iw_info = <<~'END'
         Wiphy phy0
           max # scan SSIDs: 4
@@ -184,12 +185,6 @@ module CreateAp
     def initialize
       super
       @support_auto_channel = false
-    end
-  end
-
-  class MockHostapd < Hostapd
-    def initialize
-      super 'test'
     end
   end
 end
