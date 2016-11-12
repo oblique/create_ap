@@ -24,6 +24,7 @@ module CreateAp
 
     def passphrase=(pass)
       if pass
+        pass = pass.to_s unless pass.is_a? String
         if pass.length == 64 && pass !~ /^\h+$/
           raise(ArgumentError, "Invalid PSK key")
         elsif pass.length < 8 || pass.length > 63
