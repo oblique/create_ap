@@ -127,9 +127,8 @@ module CreateAp
         end
 
         @ap.each_with_index do |ap, idx|
-          iface = ap.iface.mk_virt_iface
+          iface, bssid = ap.iface.alloc_virt_iface
           bridge = "br-ap-#{ap.network}"
-          bssid = CreateAp::mac(bridge)
 
           f.puts
           if idx == 0

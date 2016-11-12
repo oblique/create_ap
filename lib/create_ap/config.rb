@@ -35,6 +35,8 @@ module CreateAp
           @networks[name] = net
         end
 
+        ifaces = {}
+
         yaml_config['ap']&.each do |k, v|
           begin
             ssid = v['ssid']
@@ -44,12 +46,17 @@ module CreateAp
             ap.channel = v['channel']
             ap.ieee80211 = v['ieee80211']
             ap.wpa = v['wpa']
-            ap.iface = WifiIface.new(v['interface'])
+            ifname = v['interface']
+            unless ifaces.include? ifname
+              ifaces[ifname] = WifiIface.new(ifname)
+            end
+            ap.iface = ifaces[ifname]
             ap.hidden = v['hidden']
             ap.isolate_clients = v['isolate_clients']
             ap.network = v['network']
             @access_points[k] = ap
-          rescue
+          rescue => error
+            Log.error(error)
             next
           end
         end

@@ -30,6 +30,7 @@ module CreateAp
       parse_iw_info(iw_info)
 
       @support_auto_channel = !`iw dev #{ifname} survey dump`.empty? && $?.success?
+      @virt_ifaces = []
     end
 
     def support_auto_channel?
@@ -40,18 +41,31 @@ module CreateAp
       CreateAp::mac(@ifname)
     end
 
-    def mk_virt_iface
+    # we create only the first virtual interface, the rest are created by hostapd
+    def alloc_virt_iface
       ifname = @ifname[/([^-]+)/]
-      virt = nil
 
+      virt = nil
       1.upto(255) do |x|
         virt = "#{ifname}-#{x}"
-        next if CreateAp::iface? virt
-        CreateAp::run("iw phy #{phy} interface add #{virt} type __ap")
-        return virt
+        break unless CreateAp::iface?(virt) || @virt_ifaces.any? { |v| v[0] == virt }
       end
 
-      nil
+      vmac = mac
+      1.upto(255) do |x|
+        vmac = vmac.split(':').map { |v| v.to_i(16) }
+        vmac[5] = (vmac[5] + 1) % 256
+        vmac = vmac.map{ |v| '%02x' % v }.join(':')
+        break unless CreateAp::all_mac.count(vmac) > 0 || @virt_ifaces.any? { |v| v[1] == vmac }
+      end
+
+      if @virt_ifaces.empty?
+        CreateAp::run("iw phy #{phy} interface add #{virt} type __ap")
+        CreateAp::run("ip link set dev #{virt} address #{vmac}")
+      end
+
+      @virt_ifaces << [virt, vmac]
+      [virt, vmac]
     end
 
     private
