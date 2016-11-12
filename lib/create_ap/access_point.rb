@@ -39,7 +39,7 @@ module CreateAp
       @channel =
         if ch == :auto || ch == 'auto' || ch == 0
           :auto
-        elsif ch.is_a? String && ch =~ /^\d+$/
+        elsif ch.is_a?(String) && ch =~ /^\d+$/
           ch.to_i
         elsif ch.is_a? Integer
           ch
