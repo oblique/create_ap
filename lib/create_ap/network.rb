@@ -192,6 +192,7 @@ module CreateAp
         # TODO: if interface does not support virtual interfaces make it also
         # unmanaged
         @config.access_points.map{ |x| x.last.iface.ifname }.uniq.each do |iface|
+          iface = iface[/([^-]+)/]
           f.puts %Q(ENV{INTERFACE}=="#{iface}-*", ENV{NM_UNMANAGED}="1")
         end
 
