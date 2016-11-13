@@ -2,7 +2,7 @@ require 'set'
 
 module CreateAp
   class WifiIface
-    attr_reader :ifname, :phy, :allowed_channels, :ieee80211
+    attr_reader :ifname, :module, :phy, :allowed_channels, :ieee80211
 
     def initialize(ifname)
       unless File.exist? "/sys/class/net/#{ifname}/wireless"
@@ -10,6 +10,8 @@ module CreateAp
       end
 
       @ifname = ifname
+      module_link = File.readlink("/sys/class/net/#{@ifname}/device/driver/module")
+      @module = File.basename(module_link)
 
       ieee_path = '/sys/class/ieee80211'
       @phy = Dir.foreach(ieee_path) do |x|
