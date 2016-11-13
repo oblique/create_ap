@@ -26,6 +26,9 @@ module CreateAp
   end
 
   def self.main
+    Signal.trap('TERM', 'IGNORE')
+    Signal.trap('INT', 'IGNORE')
+
     FileUtils.remove_dir TMP_DIR if Dir.exist? TMP_DIR
     FileUtils.mkpath TMP_DIR
 
@@ -42,12 +45,14 @@ module CreateAp
     dnsmasq.start
     hostapd.start
 
-    Signal.trap('TERM') { throw :exit_signaled }
-    Signal.trap('INT')  { throw :exit_signaled }
-
     catch :exit_signaled do
+      Signal.trap('TERM') { throw :exit_signaled }
+      Signal.trap('INT')  { throw :exit_signaled }
       sleep
     end
+
+    Signal.trap('TERM', 'IGNORE')
+    Signal.trap('INT', 'IGNORE')
 
     puts
     puts 'Exiting...'
