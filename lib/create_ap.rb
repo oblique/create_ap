@@ -25,7 +25,22 @@ module CreateAp
     "#{time.strftime '%H:%M:%S.%3N'}: #{level}#{msg}\n"
   end
 
+  def self.check_dependencies
+    missing = []
+
+    ['hostapd', 'dnsmasq', 'ip', 'iw', 'iptables'].each do |x|
+      missing << x unless CreateAp::which(x)
+    end
+
+    unless missing.empty?
+      Log.error "You need to install the following dependencies: #{missing.join(', ')}"
+      exit 1
+    end
+  end
+
   def self.main
+    check_dependencies
+
     Signal.trap('TERM', 'IGNORE')
     Signal.trap('INT', 'IGNORE')
 
