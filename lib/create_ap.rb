@@ -61,13 +61,16 @@ module CreateAp
     hostapd.start
 
     catch :exit_signaled do
-      Signal.trap('TERM') { throw :exit_signaled }
-      Signal.trap('INT')  { throw :exit_signaled }
+      signal_exit = -> _ do
+        Signal.trap('TERM', 'IGNORE')
+        Signal.trap('INT', 'IGNORE')
+        throw :exit_signaled
+      end
+
+      Signal.trap('TERM', &signal_exit)
+      Signal.trap('INT', &signal_exit)
       sleep
     end
-
-    Signal.trap('TERM', 'IGNORE')
-    Signal.trap('INT', 'IGNORE')
 
     puts
     puts 'Exiting...'
