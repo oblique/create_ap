@@ -64,7 +64,7 @@ module CreateAp
       end
 
       if @virt_ifaces.empty?
-        CreateAp::run("iw phy #{phy} interface add #{virt} type __ap")
+        CreateAp::run("iw phy #{@phy} interface add #{virt} type __ap")
         # change mac address only if it's needed
         if CreateAp::mac(virt) == mac
           CreateAp::run("ip link set dev #{virt} address #{vmac}")
@@ -78,22 +78,29 @@ module CreateAp
     end
 
     def active_channels
-      iwdev = `iw dev`
       channels = []
-      phy_num = phy.match(/phy(\d+)/)[1].to_i
 
-      iwdev.each_line do |line|
-        if line =~ /phy##{phy_num}/ ... line =~ /phy#/
-          line.scan(/channel\s+(\d+)\s+.*/) do |x|
-            channels << x[0].to_i
-          end
-        end
+      iw_dev.scan(/channel\s+(\d+)\s+.*/) do |x|
+        channels << x[0].to_i
       end
 
       channels
     end
 
     private
+
+    def iw_dev
+      iwdev = `iw dev`
+      phy_num = @phy.match(/phy(\d+)/)[1].to_i
+
+      s = ''
+      iwdev.each_line do |line|
+        if line =~ /^phy##{phy_num}/ ... line =~ /^phy#/
+          s << line unless line =~ /^phy#/
+        end
+      end
+      s
+    end
 
     def parse_iw_info(iw_info)
       parse_channels(iw_info)
