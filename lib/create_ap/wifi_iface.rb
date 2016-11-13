@@ -43,11 +43,15 @@ module CreateAp
 
     # we create only the first virtual interface, the rest are created by hostapd
     def alloc_virt_iface
-      ifname = @ifname[/([^-]+)/]
+      ifname = @ifname.match(/(ap-)?([^-]+)/)[2]
 
       virt = nil
       1.upto(255) do |x|
-        virt = "#{ifname}-#{x}"
+        # WARNING: On Intel adapters we get `nl80211: Could not configure driver mode`
+        # if we use `wlan0-1`, but we don't if we use `wlan0-0` or if we prefix
+        # the name with a string. We don't know why this is happening.
+        # To solve the problem, we add the `ap-` prefix.
+        virt = "ap-#{ifname}-#{x}"
         break unless CreateAp::iface?(virt) || @virt_ifaces.any? { |v| v[0] == virt }
       end
 

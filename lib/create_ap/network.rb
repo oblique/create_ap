@@ -182,21 +182,21 @@ module CreateAp
       FileUtils.mkpath("#{RUN_PATH}/udev/rules.d")
 
       open("#{RUN_PATH}/udev/rules.d/create_ap.rules", 'w') do |f|
+        # TODO: if interface does not support virtual interfaces make it also
+        # unmanaged
         f.puts <<~'END'
         SUBSYSTEM!="net", GOTO="create_ap-end"
         ACTION!="add|change", GOTO="create_ap-end"
 
         ENV{INTERFACE}=="br-ap-*", ENV{NM_UNMANAGED}="1"
+        ENV{INTERFACE}=="ap-*", ENV{NM_UNMANAGED}="1"
+
+        # hostapd needs this for some adapters
+        ENV{INTERFACE}=="mon-*", ENV{NM_UNMANAGED}="1"
+        ENV{INTERFACE}=="mon.*", ENV{NM_UNMANAGED}="1"
+
+        LABEL="create_ap-end"
         END
-
-        # TODO: if interface does not support virtual interfaces make it also
-        # unmanaged
-        @config.access_points.map{ |x| x.last.iface.ifname }.uniq.each do |iface|
-          iface = iface[/([^-]+)/]
-          f.puts %Q(ENV{INTERFACE}=="#{iface}-*", ENV{NM_UNMANAGED}="1")
-        end
-
-        f.puts 'LABEL="create_ap-end"'
       end
 
       CreateAp::run('udevadm control --reload')

@@ -38,9 +38,7 @@ module CreateAp
     private
 
     def remove_all_virt_ifaces
-      # all our virtual interfaces have the following pattern: ifname-number
-      # e.g. wlan0-1
-      Dir.glob('/sys/class/net/*-*/wireless').each do |x|
+      Dir.glob('/sys/class/net/ap-*/wireless').each do |x|
         iface = x.split('/')[-2]
         CreateAp::run("iw dev #{iface} del > /dev/null 2>&1")
       end
