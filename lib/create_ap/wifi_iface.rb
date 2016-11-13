@@ -65,7 +65,12 @@ module CreateAp
 
       if @virt_ifaces.empty?
         CreateAp::run("iw phy #{phy} interface add #{virt} type __ap")
-        CreateAp::run("ip link set dev #{virt} address #{vmac}")
+        # change mac address only if it's needed
+        if CreateAp::mac(virt) == mac
+          CreateAp::run("ip link set dev #{virt} address #{vmac}")
+        end
+        # get the current mac
+        vmac = CreateAp::mac(virt)
       end
 
       @virt_ifaces << [virt, vmac]
