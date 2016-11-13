@@ -77,6 +77,22 @@ module CreateAp
       [virt, vmac]
     end
 
+    def active_channels
+      iwdev = `iw dev`
+      channels = []
+      phy_num = phy.match(/phy(\d+)/)[1].to_i
+
+      iwdev.each_line do |line|
+        if line =~ /phy##{phy_num}/ ... line =~ /phy#/
+          line.scan(/channel\s+(\d+)\s+.*/) do |x|
+            channels << x[0].to_i
+          end
+        end
+      end
+
+      channels
+    end
+
     private
 
     def parse_iw_info(iw_info)

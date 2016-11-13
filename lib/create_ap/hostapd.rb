@@ -18,13 +18,18 @@ module CreateAp
       end
 
       @hostapd_proc.each do |k, hostapd|
-        hostapd.start
+        begin
+          hostapd.start
+        rescue => error
+          Log.error error
+          @hostapd_proc[k] = nil
+        end
       end
     end
 
     def stop
       @hostapd_proc.each do |k, hostapd|
-        hostapd.stop
+        hostapd&.stop
       end
       @hostapd_proc.clear
       remove_all_virt_ifaces
@@ -185,13 +190,40 @@ module CreateAp
       ieee80211 = %i(ac n g a).find{ |x| ieee80211_arr.include?(x) && iface.ieee80211.include?(x) }
       ieee80211 ||= :auto
 
-      # get all channels and select the best one (prefer 5ghz over 2.4ghz)
+      allowed_channels = iface.allowed_channels.map { |x| x[:channel] }
+      active_channels = iface.active_channels
+
+      # get all non-auto channels
       channel_arr = @ap.map{ |x| x.channel }.uniq.select{ |x| x.is_a? Integer }
-      if %i(ac n a auto).include? ieee80211
-        channel = channel_arr.find { |x| x >= 36 && iface.allowed_channels.include?(x) }
+
+      # if we already have activated channels, then use them instead
+      unless active_channels.empty?
+        unless channel_arr.empty?
+          Log.warn "#{iface.ifname} is already on channels: #{active_channels.join(', ')}"
+        end
+        channel_arr = active_channels
       end
-      if %i(n g auto).include? ieee80211
-        channel ||= channel_arr.find{ |x| x <= 14 && iface.allowed_channels.include?(x) }
+
+      # select the best channel (prefer 5ghz over 2.4ghz)
+      unless channel_arr.empty?
+        if %i(ac n a auto).include? ieee80211
+          channel = channel_arr.find { |x| x >= 36 && allowed_channels.include?(x) }
+        end
+
+        if %i(n g auto).include? ieee80211
+          channel ||= channel_arr.find{ |x| x <= 14 && allowed_channels.include?(x) }
+        end
+
+        err = "#{iface.ifname} can not transmit on channels: #{channel_arr.join(', ')}"
+
+        if channel.nil? && active_channels.empty?
+          Log.warn "#{err}. Fallback to auto."
+          channel = :auto
+        end
+
+        unless channel
+          raise err
+        end
       end
       channel ||= :auto
 
