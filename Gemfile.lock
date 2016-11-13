@@ -17,7 +17,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  bundler (~> 1.13)
+  bundler (~> 1.0)
   create_ap!
   minitest (~> 5.0)
   rake (~> 10.0)
