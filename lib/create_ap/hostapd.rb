@@ -109,8 +109,6 @@ module CreateAp
 
         f.puts <<~END
         driver=nl80211
-        ctrl_interface=#{@ctrl}
-        ctrl_interface_group=0
         channel=#{channel}
         END
         # TODO: add country code
@@ -177,7 +175,12 @@ module CreateAp
 
           f.puts 'ignore_broadcast_ssid=1' if ap.hidden
           f.puts 'ap_isolate=1' if ap.isolate_clients
-          f.puts 'preamble=1'
+
+          f.puts <<~END
+          ctrl_interface=#{@ctrl}
+          ctrl_interface_group=0
+          preamble=1
+          END
         end
       end
     end
