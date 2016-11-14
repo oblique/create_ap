@@ -1,5 +1,6 @@
 require 'logger'
 require 'fileutils'
+require 'securerandom'
 require 'create_ap/hostapd'
 require 'create_ap/access_point'
 require 'create_ap/wifi_iface'
@@ -50,6 +51,31 @@ module CreateAp
     end
   end
 
+  def self.kill_unmanageable_childs
+    # If a previous instance of the script crashed then some of its childs
+    # might be alive. We search and kill all the processes that env variable
+    # `create_ap_magic_hash` is set and is not equal to ours.
+    ENV['create_ap_magic_hash'] = SecureRandom.hex(10)
+
+    Dir.glob('/proc/*/environ') do |f|
+      next unless f =~ %r(/proc/\d+/environ)
+      pid = f.match(%r(/proc/(\d+)/environ))[1].to_i
+      begin
+        # read enviroment variables and get `create_ap_magic_hash`
+        hash = open(f){ |x| x.read }
+          .split("\0")
+          .map{ |x| x.split('=', 2) }
+          .assoc('create_ap_magic_hash')
+
+        if hash && hash != ENV['create_ap_magic_hash']
+          Process.kill('KILL', pid)
+        end
+      rescue Errno::EACCES, Errno::ESRCH, Errno::ENOENT
+        # ignore
+      end
+    end
+  end
+
   def self.main
     begin
       check_files_and_dirs
@@ -61,6 +87,8 @@ module CreateAp
 
     Signal.trap('TERM', 'IGNORE')
     Signal.trap('INT', 'IGNORE')
+
+    kill_unmanageable_childs
 
     FileUtils.remove_dir TMP_DIR if Dir.exist? TMP_DIR
     FileUtils.mkpath TMP_DIR
