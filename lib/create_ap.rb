@@ -25,6 +25,19 @@ module CreateAp
     "#{time.strftime '%H:%M:%S.%3N'}: #{level}#{msg}\n"
   end
 
+  @@file_lock = nil
+
+  def self.check_files_and_dirs
+    raise "`/run` directory does not exist." if RUN_PATH.nil?
+
+    unless @@file_lock
+      @@file_lock = File.new("#{RUN_PATH}/create_ap.lock", 'w')
+      unless @@file_lock.flock(File::LOCK_EX | File::LOCK_NB)
+        raise "create_ap is already running"
+      end
+    end
+  end
+
   def self.check_dependencies
     missing = []
 
@@ -33,13 +46,18 @@ module CreateAp
     end
 
     unless missing.empty?
-      Log.error "You need to install the following dependencies: #{missing.join(', ')}"
-      exit 1
+      raise "You need to install the following dependencies: #{missing.join(', ')}"
     end
   end
 
   def self.main
-    check_dependencies
+    begin
+      check_files_and_dirs
+      check_dependencies
+    rescue => error
+      Log.error error
+      exit 1
+    end
 
     Signal.trap('TERM', 'IGNORE')
     Signal.trap('INT', 'IGNORE')
