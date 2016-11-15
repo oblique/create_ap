@@ -1,4 +1,6 @@
 module CreateAp
+  DNS_PORT = 5366
+
   class Dnsmasq
     def initialize(config)
       @config = config
@@ -40,6 +42,7 @@ module CreateAp
     def write_config
       open(@conf, 'w') do |f|
         f.puts <<~END
+        port=#{DNS_PORT}
         dhcp-authoritative
         domain-needed
         localise-queries

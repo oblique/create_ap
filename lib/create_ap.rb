@@ -94,10 +94,6 @@ module CreateAp
     networkctl = NetworkCtl.new(config)
     hostapd = Hostapd.new(config)
 
-    networkctl.allow_tcp_port(53)
-    networkctl.allow_udp_port(53)
-    networkctl.allow_udp_port(67)
-
     networkctl.reload
     dnsmasq.start
     hostapd.start

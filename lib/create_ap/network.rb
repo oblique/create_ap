@@ -48,18 +48,6 @@ module CreateAp
   class NetworkCtl
     def initialize(config)
       @config = config
-      @ports = {
-        tcp: [],
-        udp: []
-      }
-    end
-
-    def allow_tcp_port(port)
-      @ports[:tcp] << port
-    end
-
-    def allow_udp_port(port)
-      @ports[:udp] << port
     end
 
     def reload
@@ -87,6 +75,10 @@ module CreateAp
       @config.networks.each do |name, network|
         net_cidr = "#{network.network}/#{network.netmask}"
         br_name = "br-ap-#{name}"
+        iptables_append("create_ap-prerouting -t nat -s #{net_cidr} -d #{network.gateway} " +
+                        "-p tcp -m tcp --dport 53 -j REDIRECT --to-ports #{DNS_PORT}")
+        iptables_append("create_ap-prerouting -t nat -s #{net_cidr} -d #{network.gateway} " +
+                        "-p udp -m udp --dport 53 -j REDIRECT --to-ports #{DNS_PORT}")
         iptables_append("create_ap-postrouting -t nat -s #{net_cidr} ! -o #{br_name} -j MASQUERADE")
         iptables_append("create_ap-forward -i #{br_name} ! -o #{br_name} -j ACCEPT")
         iptables_append("create_ap-forward -i #{br_name} -o #{br_name} -j ACCEPT")
@@ -95,11 +87,11 @@ module CreateAp
       open('/proc/sys/net/ipv4/conf/all/forwarding', 'w') { |f| f.puts 1 }
       open('/proc/sys/net/ipv4/ip_forward', 'w') { |f| f.puts 1 }
 
-      @ports[:tcp].each do |port|
+      [DNS_PORT].each do |port|
         iptables_append("create_ap-input -p tcp -m tcp --dport #{port} -j ACCEPT")
       end
 
-      @ports[:udp].each do |port|
+      [DNS_PORT, 67].each do |port|
         iptables_append("create_ap-input -p udp -m udp --dport #{port} -j ACCEPT")
       end
     end
@@ -126,7 +118,7 @@ module CreateAp
     end
 
     def firewall_reset
-      ['POSTROUTING'].each do |x|
+      ['PREROUTING', 'POSTROUTING'].each do |x|
         chain = "create_ap-#{x.downcase}"
         iptables_delete("#{x} -t nat -j #{chain}")
         iptables("-t nat -F #{chain} > /dev/null 2>&1")
@@ -162,7 +154,7 @@ module CreateAp
     end
 
     def iptables_init_chains
-      ['POSTROUTING'].each do |x|
+      ['PREROUTING', 'POSTROUTING'].each do |x|
         chain = "create_ap-#{x.downcase}"
         iptables("-N #{chain} -t nat")
         iptables_insert("#{x} -t nat -j #{chain}")
