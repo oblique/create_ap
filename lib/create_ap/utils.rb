@@ -21,6 +21,13 @@ module CreateAp
     nil
   end
 
+  def self.create_lock_file(path)
+    file = File.new(path, File::CREAT | File::EXCL | File::WRONLY) rescue nil
+    file ||= File.new(path, File::WRONLY)
+    return nil unless file.flock(File::LOCK_EX | File::LOCK_NB)
+    file
+  end
+
   def self.cat(file)
     open(file) { |f| f.read }
   end

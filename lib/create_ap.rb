@@ -31,12 +31,8 @@ module CreateAp
   def self.check_files_and_dirs
     raise "`/run` directory does not exist." if RUN_PATH.nil?
 
-    unless @@file_lock
-      @@file_lock = File.new("#{RUN_PATH}/create_ap.lock", 'w')
-      unless @@file_lock.flock(File::LOCK_EX | File::LOCK_NB)
-        raise "create_ap is already running"
-      end
-    end
+    @@file_lock ||= CreateAp::create_lock_file("#{RUN_PATH}/create_ap.lock")
+    raise "create_ap is already running" unless @@file_lock
   end
 
   def self.check_dependencies
