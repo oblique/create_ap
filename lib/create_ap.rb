@@ -44,8 +44,15 @@ module CreateAp
   def self.check_dependencies
     missing = []
 
-    ['hostapd', 'dnsmasq', 'ip', 'iw', 'iptables'].each do |x|
-      missing << x unless CreateAp::which(x)
+    ['hostapd', 'dnsmasq', ['ip', 'iproute2'], 'iw', 'iptables'].each do |x|
+      if x.is_a? Array
+        bin = x[0]
+        dep = x[1]
+      else
+        bin = x
+        dep = x
+      end
+      missing << dep unless CreateAp::which(bin)
     end
 
     unless missing.empty?
@@ -55,8 +62,8 @@ module CreateAp
 
   def self.main
     begin
-      check_files_and_dirs
       check_dependencies
+      check_files_and_dirs
     rescue => error
       Log.error error
       exit 1
