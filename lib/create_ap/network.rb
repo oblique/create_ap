@@ -121,15 +121,15 @@ module CreateAp
       ['PREROUTING', 'POSTROUTING'].each do |x|
         chain = "create_ap-#{x.downcase}"
         iptables_delete("#{x} -t nat -j #{chain}")
-        iptables("-t nat -F #{chain} > /dev/null 2>&1")
-        iptables("-t nat -X #{chain} > /dev/null 2>&1")
+        iptables_noout("-t nat -F #{chain}")
+        iptables_noout("-t nat -X #{chain}")
       end
 
       ['FORWARD', 'INPUT'].each do |x|
         chain = "create_ap-#{x.downcase}"
         iptables_delete("#{x} -j #{chain}")
-        iptables("-F #{chain} > /dev/null 2>&1")
-        iptables("-X #{chain} > /dev/null 2>&1")
+        iptables_noout("-F #{chain}")
+        iptables_noout("-X #{chain}")
       end
     end
 
@@ -139,16 +139,20 @@ module CreateAp
       CreateAp::run("iptables -w #{rule}")
     end
 
+    def iptables_noout(rule)
+      CreateAp::run_noout("iptables -w #{rule}")
+    end
+
     def iptables_insert(rule)
-      iptables("-I #{rule}") unless iptables("-C #{rule} > /dev/null 2>&1")
+      iptables("-I #{rule}") unless iptables_noout("-C #{rule}")
     end
 
     def iptables_append(rule)
-      iptables("-A #{rule}") unless iptables("-C #{rule} > /dev/null 2>&1")
+      iptables("-A #{rule}") unless iptables_noout("-C #{rule}")
     end
 
     def iptables_delete(rule)
-      while iptables("-C #{rule} > /dev/null 2>&1")
+      while iptables_noout("-C #{rule}")
         iptables("-D #{rule}")
       end
     end

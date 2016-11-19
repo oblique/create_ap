@@ -6,34 +6,20 @@ module CreateAp
       @config = config
       @conf = "#{TMP_DIR}/dnsmasq.conf"
       @lease_file = "#{TMP_DIR}/dhcp.leases"
-      @thread = nil
-      @process = nil
+      @daemon_name = "dnsmasq"
     end
 
     def start
-      if @process
-        Log.debug 'dnsmasq is already running'
-        return nil
-      end
-
       write_config
-      @process = Subprocess.new('dnsmasq', '-C', @conf, '-k')
-      @thread = Thread.new do
-        @process.each do |line|
-          Log.info "#{@process.exe}[#{@process.pid}]: #{line}"
-        end
-      end
+      CreateAp::daemonctl.add(@daemon_name, 'dnsmasq', '-C', @conf, '-k')
     end
 
     def stop
-      Process.kill('TERM', @process.pid) if @process&.pid
-      @thread&.join
-      @thread = nil
-      @process = nil
+      CreateAp::daemonctl.rm(@daemon_name)
     end
 
     def restart
-      stop
+      stop rescue
       start
     end
 

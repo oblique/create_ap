@@ -1,5 +1,3 @@
-require 'create_ap/subprocess'
-
 module CreateAp
   class Hostapd
     def initialize(config)
@@ -45,7 +43,7 @@ module CreateAp
     def remove_all_virt_ifaces
       Dir.glob('/sys/class/net/ap-*/wireless').each do |x|
         iface = x.split('/')[-2]
-        CreateAp::run("iw dev #{iface} del > /dev/null 2>&1")
+        CreateAp::run_noout("iw dev #{iface} del")
       end
     end
   end
@@ -54,8 +52,7 @@ module CreateAp
     def initialize(phy)
       @ap = []
       @phy = phy
-      @thread = nil
-      @process = nil
+      @daemon_name = "hostapd-#{@phy}"
       @conf = "#{TMP_DIR}/hostapd_#{@phy}.conf"
       @ctrl = "#{TMP_DIR}/hostapd"
     end
@@ -73,29 +70,16 @@ module CreateAp
     end
 
     def start
-      if @process
-        Log.debug 'hostapd is already running'
-        return nil
-      end
-
       write_config
-      @process = Subprocess.new('hostapd', @conf)
-      @thread = Thread.new do
-        @process.each do |line|
-          Log.info "#{@process.exe}[#{@process.pid}]: #{line}"
-        end
-      end
+      CreateAp::daemonctl.add(@daemon_name, 'hostapd', @conf)
     end
 
     def stop
-      Process.kill('TERM', @process.pid) if @process&.pid
-      @thread&.join
-      @thread = nil
-      @process = nil
+      CreateAp::daemonctl.rm(@daemon_name)
     end
 
     def restart
-      stop
+      stop rescue
       start
     end
 

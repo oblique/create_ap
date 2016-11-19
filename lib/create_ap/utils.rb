@@ -1,16 +1,47 @@
-require 'create_ap/subprocess'
+require 'childprocess'
 
 module CreateAp
-  def self.run(*args)
-    p = Subprocess.new(*args)
-    status = p.each do |line|
-      if block_given?
-        yield line
-      else
-        Log.info "#{p.exe}[#{p.pid}]: #{line}"
+  def self.run(*cmd)
+    name = cmd[0]
+
+    if cmd.length == 1
+      name = name.split[0]
+      cmd.unshift('/bin/sh', '-c')
+    end
+
+    r, w = IO.pipe
+    p = ChildProcess.new(*cmd)
+    p.io.stdout = w
+    p.io.stderr = w
+    p.start
+    w.close
+    Log.debug "[pid: #{p.pid}] Running: #{cmd}"
+
+    t = Thread.new do
+      loop do
+        line = r.gets.chop rescue break
+        Log.info "#{name}[#{p.pid}]: #{line}"
       end
     end
-    status&.success?
+
+    exit_code = p.wait
+    t.join
+    r.close
+    Log.debug "[pid: #{p.pid}] Exit code: #{exit_code}"
+
+    exit_code == 0
+  end
+
+  def self.run_noout(*cmd)
+    cmd.unshift('/bin/sh', '-c') if cmd.length == 1
+    p = ChildProcess.new(*cmd)
+    p.start
+
+    Log.debug "[pid: #{p.pid}] Running: #{cmd}"
+    exit_code = p.wait
+    Log.debug "[pid: #{p.pid}] Exit code: #{exit_code}"
+
+    exit_code == 0
   end
 
   def self.which(cmd)
