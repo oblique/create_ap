@@ -17,15 +17,12 @@ module CreateAp
     w.close
     Log.debug "[pid: #{p.pid}] Running: #{cmd}"
 
-    t = Thread.new do
-      loop do
-        line = r.gets.chop rescue break
-        Log.info "#{name}[#{p.pid}]: #{line}"
-      end
+    loop do
+      line = r.gets.chop rescue break
+      Log.info "#{name}[#{p.pid}]: #{line}"
     end
 
     exit_code = p.wait
-    t.join
     r.close
     Log.debug "[pid: #{p.pid}] Exit code: #{exit_code}"
 
