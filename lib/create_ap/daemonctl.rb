@@ -40,7 +40,7 @@ module CreateAp
     def add(name, *cmd)
       @lock.synchronize do
         raise "'Daemon #{name}' is already added" if exist? name
-        @daemons[name] = { cmd: cmd }
+        @daemons[name] = { cmd: cmd, start_tm: [] }
         start_daemon(name)
       end
     end
@@ -90,6 +90,7 @@ module CreateAp
         end
 
         @daemons[name][:proc] = p
+        @daemons[name][:start_tm] << Time.new
       end
     end
 
@@ -99,11 +100,18 @@ module CreateAp
           @lock.synchronize do
             @daemons.each do |name, daemon|
               next unless daemon[:proc]
-              if daemon[:proc].exited?
-                Log.info "Daemon '#{name}' exited. Starting it again."
-                daemon.delete(:proc)
-                start_daemon(name)
+              next unless daemon[:proc].exited?
+              daemon.delete(:proc)
+
+              # if the daemon exited 3 times within 60 seconds then we disable it
+              daemon[:start_tm] = daemon[:start_tm].last(3)
+              if daemon[:start_tm].length == 3 && Time.new - daemon[:start_tm][0] <= 60
+                Log.error "Daemon '#{name}' exited too may times too quickly. Stop retrying."
+                next
               end
+
+              Log.warn "Daemon '#{name}' exited. Try to start it again."
+              start_daemon(name)
             end
           end
           sleep 2
