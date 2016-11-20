@@ -31,7 +31,7 @@ module CreateAp
 
       parse_iw_info(iw_info)
 
-      @support_auto_channel = !`iw dev #{ifname} survey dump`.empty? && $?.success?
+      @support_auto_channel = !`iw dev #{ifname} survey dump 2>&1`.empty? && $?.success?
       @virt_ifaces = []
     end
 
@@ -82,8 +82,10 @@ module CreateAp
     def active_channels
       channels = []
 
-      iw_dev.scan(/channel\s+(\d+)\s+.*/) do |x|
-        channels << x[0].to_i
+      active_virt_ifaces.each do |x|
+        channels += `iw dev #{x} link 2>&1`
+          .scan(/Connected to .*?freq: (\d+)/m)
+          .map { |x| freq_to_channel(x[0].to_i) }
       end
 
       channels
@@ -91,17 +93,35 @@ module CreateAp
 
     private
 
-    def iw_dev
-      iwdev = `iw dev`
-      phy_num = @phy.match(/phy(\d+)/)[1].to_i
+    def active_virt_ifaces
+      ifaces = []
+      path = "/sys/class/ieee80211/#{@phy}/device"
 
-      s = ''
-      iwdev.each_line do |line|
-        if line =~ /^phy##{phy_num}/ ... line =~ /^phy#/
-          s << line unless line =~ /^phy#/
-        end
+      Dir.glob("#{path}/net/*") do |x|
+        ifaces << File.basename(x)
       end
-      s
+
+      Dir.glob("#{path}/net:*") do |x|
+        ifaces << File.basename(x)[4..-1]
+      end
+
+      ifaces
+    end
+
+    def freq_to_channel(freq)
+      if freq == 2484
+        14
+      elsif freq < 2484
+        (freq - 2407) / 5
+      elsif freq.between?(4910, 4980)
+        (freq - 4000) / 5
+      elsif freq <= 45000
+        (freq - 5000) / 5
+      elsif freq.between?(58320, 64800)
+        (freq - 56160) / 2160
+      else
+        raise "Unsupported frequency: #{freq}"
+      end
     end
 
     def parse_iw_info(iw_info)
@@ -113,9 +133,9 @@ module CreateAp
       @allowed_channels = []
       # parse frequency table
       iw_info.scan(/\* (\d+) MHz \[(\d+)\] (\(.*\))/) do |x|
-        # frequencies that have 'no IR' or 'disable' can not be used for
-        # transmission
-        next if x[2] =~ /no IR|disable/
+        # frequencies that have 'no IR', 'no IBSS', or 'disabled' can not be
+        # used for transmission
+        next if x[2] =~ /no IR|no IBSS|disabled/
         ch = {
           channel:  x[1].to_i,
           mhz:      x[0].to_i
