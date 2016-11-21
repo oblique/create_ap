@@ -32,8 +32,8 @@
     cd create_ap
     make install
 
-### ArchLinux (AUR)
-    yaourt -S create_ap
+### ArchLinux
+    pacman -S create_ap
 
 ### Gentoo
     emerge layman
