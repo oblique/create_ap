@@ -279,8 +279,7 @@ get_adapter_kernel_module() {
 can_be_sta_and_ap() {
     # iwconfig does not provide this information, assume false
     [[ $USE_IWCONFIG -eq 1 ]] && return 1
-    get_adapter_info "$1" | grep -E '{.* managed.* AP.*}' > /dev/null 2>&1 && return 0
-    get_adapter_info "$1" | grep -E '{.* AP.* managed.*}' > /dev/null 2>&1 && return 0
+    get_adapter_info "$1"  | sed -r 's/.*\{.* AP.*\} *<= *([0-9]*).*/\1/g' | sed -r 's/([0-9]*).*/\1/g' | awk '$1 > 1' | grep -E '[0-9*]' > /dev/null 2>&1 && return 0
     return 1
 }
 
