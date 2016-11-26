@@ -9,8 +9,12 @@ module CreateAp
       cmd.unshift('/bin/sh', '-c')
     end
 
-    r, w = IO.pipe
+    stdbuf_exists = !CreateAp::which('stdbuf').nil?
+    cmd.unshift('stdbuf', '-oL') if stdbuf_exists
     p = ChildProcess.new(*cmd)
+    cmd.shift(2) if stdbuf_exists
+
+    r, w = IO.pipe
     p.io.stdout = w
     p.io.stderr = w
     p.start
@@ -31,7 +35,12 @@ module CreateAp
 
   def self.run_noout(*cmd)
     cmd.unshift('/bin/sh', '-c') if cmd.length == 1
+
+    stdbuf_exists = !CreateAp::which('stdbuf').nil?
+    cmd.unshift('stdbuf', '-oL') if stdbuf_exists
     p = ChildProcess.new(*cmd)
+    cmd.shift(2) if stdbuf_exists
+
     p.start
 
     Log.debug "[pid: #{p.pid}] Running: #{cmd}"
