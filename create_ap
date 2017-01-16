@@ -77,7 +77,7 @@ usage() {
     echo "  --no-dns                Disable dnsmasq DNS server"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                      DNS server will take into account /etc/hosts"
-    echo "  -e <hosts_file>          DNS server will take into account additional hosts file"
+    echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
     echo
     echo "Useful informations:"
     echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
