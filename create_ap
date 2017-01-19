@@ -77,6 +77,7 @@ usage() {
     echo "  --no-dns                Disable dnsmasq DNS server"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                      DNS server will take into account /etc/hosts"
+    echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
     echo
     echo "Useful informations:"
     echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
@@ -606,6 +607,7 @@ CHANNEL=default
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
+ADDN_HOSTS=
 DHCP_DNS=gateway
 NO_DNS=0
 HIDDEN=0
@@ -1023,7 +1025,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1073,6 +1075,11 @@ while :; do
         -d)
             shift
             ETC_HOSTS=1
+            ;;
+        -e)
+            shift
+            ADDN_HOSTS="$1"
+            shift
             ;;
         -n)
             shift
@@ -1667,6 +1674,7 @@ EOF
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
+    [[ -n "$ADDN_HOSTS" ]] && echo "addn-hosts=${ADDN_HOSTS}" >> $CONFDIR/dnsmasq.conf
     if [[ "$SHARE_METHOD" == "none" && "$REDIRECT_TO_LOCALHOST" == "1" ]]; then
         cat << EOF >> $CONFDIR/dnsmasq.conf
 address=/#/$GATEWAY
