@@ -6,8 +6,7 @@ After=network.target
 Type=simple
 ExecStart=/usr/bin/create_ap --config /etc/create_ap.conf
 KillSignal=SIGINT
-Restart=on-failure
-RestartSec=5
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
