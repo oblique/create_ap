@@ -610,6 +610,7 @@ ETC_HOSTS=0
 ADDN_HOSTS=
 DHCP_DNS=gateway
 NO_DNS=0
+NO_DNSMASQ=0
 HIDDEN=0
 MAC_FILTER=0
 MAC_FILTER_ACCEPT=/etc/hostapd/hostapd.accept
@@ -631,7 +632,7 @@ USE_PSK=0
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
@@ -1025,7 +1026,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1175,6 +1176,10 @@ while :; do
         --no-dns)
             shift
             NO_DNS=1
+            ;;
+        --no-dnsmasq)
+            shift
+            NO_DNSMASQ=1
             ;;
         --redirect-to-localhost)
             shift
@@ -1652,7 +1657,7 @@ fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
-else
+elif [[ $NO_DNSMASQ -eq 0 ]]; then
     # dnsmasq config (dhcp + dns)
     DNSMASQ_VER=$(dnsmasq -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
     version_cmp $DNSMASQ_VER 2.63
@@ -1806,9 +1811,11 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
         complain dnsmasq
     fi
 
-    umask 0033
-    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
-    umask $SCRIPT_UMASK
+    if [[ $NO_DNSMASQ -eq 0 ]]; then
+      umask 0033
+      dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
+      umask $SCRIPT_UMASK
+    fi
 fi
 
 # start access point
