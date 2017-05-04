@@ -56,7 +56,6 @@ usage() {
     echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt               Do not create virtual interface"
     echo "  --no-haveged            Do not run 'haveged' automatically when needed"
-    echo "  --no-dnsmasq            Do not run 'dnsmasq'"
     echo "  --fix-unmanaged         If NetworkManager shows your interface as unmanaged after you"
     echo "                          close create_ap, then use this option to switch your interface"
     echo "                          back to managed"
@@ -76,6 +75,7 @@ usage() {
     echo
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
+    echo "  --no-dnsmasq            Disable dnsmasq server completely"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                      DNS server will take into account /etc/hosts"
     echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
@@ -1181,6 +1181,7 @@ while :; do
         --no-dnsmasq)
             shift
             NO_DNSMASQ=1
+            NO_DNS=1
             ;;
         --redirect-to-localhost)
             shift
@@ -1804,15 +1805,16 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     else
         DNS_PORT=0
     fi
-    iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
-
-    if which complain > /dev/null 2>&1; then
-        # openSUSE's apparmor does not allow dnsmasq to read files.
-        # remove restriction.
-        complain dnsmasq
-    fi
 
     if [[ $NO_DNSMASQ -eq 0 ]]; then
+      iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+
+      if which complain > /dev/null 2>&1; then
+          # openSUSE's apparmor does not allow dnsmasq to read files.
+          # remove restriction.
+          complain dnsmasq
+      fi
+
       umask 0033
       dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
       umask $SCRIPT_UMASK
