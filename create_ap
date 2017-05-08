@@ -1181,7 +1181,6 @@ while :; do
         --no-dnsmasq)
             shift
             NO_DNSMASQ=1
-            NO_DNS=1
             ;;
         --redirect-to-localhost)
             shift
@@ -1234,6 +1233,11 @@ if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
       $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" ]]; then
     usage >&2
     exit 1
+fi
+
+# Set NO_DNS, if dnsmasq is disabled
+if [[ $NO_DNSMASQ -eq 1 ]]; then
+  NO_DNS=1
 fi
 
 trap "cleanup_lock" EXIT
