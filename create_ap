@@ -75,6 +75,7 @@ usage() {
     echo
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
+    echo "  --no-dnsmasq            Disable dnsmasq server completely"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                      DNS server will take into account /etc/hosts"
     echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
@@ -610,6 +611,7 @@ ETC_HOSTS=0
 ADDN_HOSTS=
 DHCP_DNS=gateway
 NO_DNS=0
+NO_DNSMASQ=0
 HIDDEN=0
 MAC_FILTER=0
 MAC_FILTER_ACCEPT=/etc/hostapd/hostapd.accept
@@ -631,7 +633,7 @@ USE_PSK=0
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
@@ -1025,7 +1027,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1176,6 +1178,10 @@ while :; do
             shift
             NO_DNS=1
             ;;
+        --no-dnsmasq)
+            shift
+            NO_DNSMASQ=1
+            ;;
         --redirect-to-localhost)
             shift
             REDIRECT_TO_LOCALHOST=1
@@ -1227,6 +1233,11 @@ if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
       $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" ]]; then
     usage >&2
     exit 1
+fi
+
+# Set NO_DNS, if dnsmasq is disabled
+if [[ $NO_DNSMASQ -eq 1 ]]; then
+  NO_DNS=1
 fi
 
 trap "cleanup_lock" EXIT
@@ -1652,7 +1663,7 @@ fi
 
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
-else
+elif [[ $NO_DNSMASQ -eq 0 ]]; then
     # dnsmasq config (dhcp + dns)
     DNSMASQ_VER=$(dnsmasq -v | grep -m1 -oE '[0-9]+(\.[0-9]+)*\.[0-9]+')
     version_cmp $DNSMASQ_VER 2.63
@@ -1798,17 +1809,20 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     else
         DNS_PORT=0
     fi
-    iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
 
-    if which complain > /dev/null 2>&1; then
-        # openSUSE's apparmor does not allow dnsmasq to read files.
-        # remove restriction.
-        complain dnsmasq
+    if [[ $NO_DNSMASQ -eq 0 ]]; then
+      iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+
+      if which complain > /dev/null 2>&1; then
+          # openSUSE's apparmor does not allow dnsmasq to read files.
+          # remove restriction.
+          complain dnsmasq
+      fi
+
+      umask 0033
+      dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
+      umask $SCRIPT_UMASK
     fi
-
-    umask 0033
-    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
-    umask $SCRIPT_UMASK
 fi
 
 # start access point
