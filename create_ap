@@ -1717,15 +1717,15 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         iptables -w -t nat -I POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE || die
         iptables -w -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
         iptables -w -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
-        echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
-        echo 1 > /proc/sys/net/ipv4/ip_forward || die
+        echo -n 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
+        echo -n 1 > /proc/sys/net/ipv4/ip_forward || die
         # to enable clients to establish PPTP connections we must
         # load nf_nat_pptp module
         modprobe nf_nat_pptp > /dev/null 2>&1
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         # disable iptables rules for bridged interfaces
         if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
-            echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
+            echo -n 0 > /proc/sys/net/bridge/bridge-nf-call-iptables
         fi
 
         # to initialize the bridge interface correctly we need to do the following:
@@ -1756,7 +1756,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
             ip link add name $BRIDGE_IFACE type bridge || die
             ip link set dev $BRIDGE_IFACE up || die
             # set 0ms forward delay
-            echo 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
+            echo -n 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
 
             # attach internet interface to bridge interface
             ip link set dev $INTERNET_IFACE promisc on || die
