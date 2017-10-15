@@ -17,6 +17,7 @@ echo "installing create_ap from git clone"
 sudo make install
 
 echo "edit /etc/create_ap.conf"
+echo "make sure to set the right values"
 sudo nano /etc/create_ap.conf
 
 echo "making create_ap start at boot"
