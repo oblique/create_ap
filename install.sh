@@ -11,7 +11,7 @@ echo "installing dependencies"
 sudo apt-get install $DEPS
 
 echo "cloning create_ap git"
-git clone https://github.com/oblique/create_ap
+git clone https://github.com/itsdarklikehell/create_ap
 cd create_ap
 echo "installing create_ap from git clone"
 sudo make install
