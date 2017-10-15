@@ -20,7 +20,7 @@ echo "edit /etc/create_ap.conf"
 echo "make sure to set the right values"
 sudo nano /etc/create_ap.conf
 
-#uncomment this tomake create_ap start at boot"
+#uncomment this to make create_ap start at boot"
 #echo "making create_ap start at boot"
 #systemctl enable create_ap
 
