@@ -29,4 +29,4 @@ systemctl enable create_ap
 systemctl start create_ap
 
 #uncomment this to manually start create_ap with the $BBSID and $WPA2PASS provided at the start of this script
-create_ap wlan0 eth0 $BSSID $WPA2PASS
+sudo create_ap wlan0 eth0 $BSSID $WPA2PASS
