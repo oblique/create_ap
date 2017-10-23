@@ -1,7 +1,7 @@
 #!/bin/bash
 BSSID="h0tsp0t"
 WPA2PASS="supersecretpassword"
-DEPS="git bash util-linux procps hostapd iproute iw haveged  dnsmasq isc-dhcp-server net-tools iptables"
+DEPS="git build-essential bash util-linux procps hostapd iproute iw haveged  dnsmasq isc-dhcp-server net-tools iptables"
 
 ####################################################
 ### create_ap installation script made by rizzo  ###
@@ -15,7 +15,7 @@ echo "cloning create_ap git"
 git clone https://github.com/itsdarklikehell/create_ap
 cd create_ap
 echo "installing create_ap from git clone"
-sudo make install
+make install
 
 echo "edit /etc/create_ap.conf"
 echo "make sure to set the right values"
