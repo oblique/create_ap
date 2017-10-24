@@ -45,74 +45,129 @@ err() {
 usage() {
 echo "Usage: $PROGNAME [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]
 
-Options:
+This script will create a local access point launching a hostapd instance.
+See the \"HOSTAPD SPECIFIC OPTIONS\" section below.
+Starting hostapd is the default task of this script. There are a few other possible tasks.
+See the \"OPTIONS FOR OTHER TASKS\" section below.
+
+If low entropy is detected (looking at /proc/sys/kernel/random/entropy_avail),
+haveged is started (if it is available) to provide good entropy to hostapd!
+See the --no-haveged parameter under \"GENERAL OPTIONS\" section below.
+
+Optionally also a dnsmasq server will be launched, taking care of DHCP requests
+and if not disabled also of DNS.
+See the \"NON-BRIDGING OPTIONS\" section below.
+
+
+:::: OPTIONS ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+GENERAL OPTIONS:
   -h, --help              Show this help
   --version               Print version number
-  -c <channel>            Channel number (default: 1)
-  -w <WPA version>        Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)
+  --config <conf_file>    Load all OPTIONS provided to this script from conf_file.
+                          See the --mkconfig option on how to create the conf_file.
+
   -n                      Disable Internet sharing (if you use this, don't pass
-                          the <interface-with-internet> argument)
+                          the <interface-with-internet> argument), shortcut OPTION for '-m none'
   -m <method>             Method for Internet sharing.
                           The methods 'nat' and 'none' will launch a dnsmasq instance (serving dns and dhcp).
                           Use: 'nat' for NAT (default)
                                'bridge' for bridging
                                'none' for no Internet sharing (equivalent to -n)
-  --pre-ap-script <file>  This script will be called right before the AP is started (hostap is called,
-                          so dnsmasqd would be already running). That means after all netwwork setup is done.
-                          This gives opportunity to setup further virtual IPs for instance.
-                          The script will be called with these paramters: '<CONFDIR>' '<BRIDGE_IFACE>'
-                               '<CONFDIR>' containing hostapd.conf and potentially dnsmasqd.conf
+
+OPTIONS FOR OTHER TASKS:
+
+The default task for this script is to launch a hostapd instance. But this script can do more.
+The following options are meant to be used one at a time (mutually exclusive).
+They will have this script do something OTHER than running hostapd.
+
+  --fix-unmanaged          If NetworkManager shows your interface as unmanaged after you
+                           close create_ap, then use this option to switch your interface
+                           back to managed and exit.
+
+  --mkconfig <conf_file>   Store configs in conf_file and exit.
+                           See --config option on how to use a conf_file.
+
+HOSTAPD SPECIFIC OPTIONS:
+
+The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHER TASKS\" section).
+
+  --no-virt                Do not create virtual interface
+  --mac <MAC>              Set (attempt to change) the MAC address of the provided <wifi-interface>.
+
+  --no-haveged             Do not run 'haveged' automatically when needed
+
+  --run-pre-ap <file>      <file> will be called right before the AP is started (hostapd is called,
+                           so dnsmasq would be already running). That means after all netwwork setup is done.
+                           This gives opportunity to setup further virtual IPs for instance.
+                           The script will be called with these paramters: '<CONFDIR>' '<BRIDGE_IFACE>'
+                               '<CONFDIR>' containing hostapd.conf and potentially dnsmasq.conf
                                '<BRIDGE_IFACE>' can be empty if there is no bridge (so the -m <method> is NOT 'bridge')
-                          On exit / cleanup the script will be called again with '--cleanup' as 1st parameter,
-                          followed by the same parameters than before.
-  --psk                   Use 64 hex digits pre-shared-key instead of passphrase
-  --hidden                Make the Access Point hidden (do not broadcast the SSID)
-  --mac-filter            Enable MAC address filtering
-  --mac-filter-accept     Location of MAC address filter list (defaults to /etc/hostapd/hostapd.accept)
-  --redirect-to-localhost If -n is set, redirect every web request to localhost (useful for public information networks)
-  --hostapd-debug <level> With level between 1 and 2, passes arguments -d or -dd to hostapd for debugging.
-  --isolate-clients       Disable communication between clients
-  --ieee80211n            Enable IEEE 802.11n (HT)
-  --ieee80211ac           Enable IEEE 802.11ac (VHT)
-  --ht_capab <HT>         HT capabilities (default: [HT40+])
-  --vht_capab <VHT>       VHT capabilities
-  --country <code>        Set two-letter country code for regularity (example: US)
-  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)
-  --driver                Choose your WiFi adapter driver (default: nl80211)
-  --no-virt               Do not create virtual interface
-  --no-haveged            Do not run 'haveged' automatically when needed
-  --fix-unmanaged         If NetworkManager shows your interface as unmanaged after you
-                          close create_ap, then use this option to switch your interface
-                          back to managed
-  --mac <MAC>             Set MAC address
-  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP
-  --daemon                Run create_ap in the background
-  --stop <id>             Send stop command to an already running create_ap. For an <id>
-                          you can put the PID of create_ap or the WiFi interface. You can
-                          get them with --list-running
-  --list-running          Show the create_ap processes that are already running
-  --list-clients <id>     List the clients connected to create_ap instance associated with <id>.
-                          For an <id> you can put the PID of create_ap or the WiFi interface.
-                          If virtual WiFi interface was created, then use that one.
-                          You can get them with --list-running
-  --mkconfig <conf_file>  Store configs in conf_file
-  --config <conf_file>    Load configs from conf_file
+                           On exit / cleanup the script will be called again with '--cleanup' as 1st parameter,
+                           followed by the same parameters than before.
 
-Non-Bridging Options:
-  --no-dns                Disable dnsmasq DNS server
-  --no-dnsmasq            Disable dnsmasq server completely
-  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)
-  -d                      DNS server will take into account /etc/hosts
-  -e <hosts_file>         DNS server will take into account additional hosts file
+Directly influence the hostapd.conf content:
 
-Useful informations:
+  -w <WPA version>         Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)
+  -c <channel>             Channel number (default: 1)
+  --country <code>         Set two-letter country code for regularity (example: US)
+  --freq-band <GHz>        Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)
+  --psk                    Use 64 hex digits pre-shared-key instead of passphrase
+  --hidden                 Make the Access Point hidden (do not broadcast the SSID)
+  --mac-filter             Enable MAC address filtering
+  --mac-filter-accept      Location of MAC address filter list (defaults to /etc/hostapd/hostapd.accept)
+  --isolate-clients        Disable communication between clients
+  --ieee80211n             Enable IEEE 802.11n (HT)
+  --ieee80211ac            Enable IEEE 802.11ac (VHT)
+  --ht_capab <HT>          HT capabilities (default: [HT40+])
+  --vht_capab <VHT>        VHT capabilities
+  --driver                 Choose your WiFi adapter driver (default: nl80211)
+  --hostapd-debug <level>  With level between 1 and 2, passes arguments -d or -dd to hostapd for debugging.
+
+DAEMONIZE OPTIONS:
+
+The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHER TASKS\" section).
+By default this script will launch hostapd in foreground.
+
+  --daemon                 Run create_ap in the background
+  --stop <id>              Send stop command to an already running create_ap. For an <id>
+                           you can put the PID of create_ap or the WiFi interface. You can
+                           get them with --list-running
+  --list-running           Show the create_ap processes that are already running
+  --list-clients <id>      List the clients connected to create_ap instance associated with <id>.
+                           For an <id> you can put the PID of create_ap or the WiFi interface.
+                           If virtual WiFi interface was created, then use that one.
+                           You can get them with --list-running
+
+NON-BRIDGING OPTIONS:
+
+The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHER TASKS\" section).
+The following options are only relevant if NOT in BRIDGE mode (-m bridge).
+Specifically they only apply if '-m none'/'-n' or '-m nat' was provided.
+
+Because only in NON-BRIDGING mode, the dnsmasq instance is launched.
+
+  --redirect-to-localhost  If -n is set (-m none), redirect every web request to localhost
+                           (useful for public information networks)
+  --dhcp-dns <IP1[,IP2]>   Set DNS returned by DHCP
+  --no-dns                 Disable dnsmasq DNS server
+  --no-dnsmasq             Disable dnsmasq server completely
+  -d                       DNS server will take into account /etc/hosts
+  -e <hosts_file>          DNS server will take into account additional hosts file
+  -g <gateway>             IPv4 Gateway for the Access Point (default: 192.168.12.1)
+
+
+::: USEFUL INFORMATION ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
   * If you're not using the --no-virt option, then you can create an AP with the same
     interface you are getting your Internet connection.
   * You can pass your SSID and password through pipe or through arguments (see examples).
   * On bridge method if the <interface-with-internet> is not a bridge interface, then
     a bridge interface is created automatically.
 
-Examples:
+
+:::: EXAMPLES :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
   $PROGNAME wlan0 eth0 MyAccessPoint MyPassPhrase
   echo -e 'MyAccessPoint\nMyPassPhrase' | $PROGNAME wlan0 eth0
   $PROGNAME wlan0 eth0 MyAccessPoint
@@ -1062,7 +1117,7 @@ done
 
 [ $# -eq 0 ] && usage
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","pre-ap-script:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-ap:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1072,9 +1127,9 @@ while :; do
         -h|--help)
             usage
             ;;
-        --pre-ap-script)
+        --run-pre-ap)
             PRE_AP_SCRIPT="$1"; shift
-            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be an executable file. See --help for more info."
+            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] || err "Parameter to --run-pre-ap must be an executable file. See --help for more info."
             ;;
         --version)
             echo $VERSION
