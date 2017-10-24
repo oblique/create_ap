@@ -894,10 +894,12 @@ _cleanup() {
     fi
 
     if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
+        #NO DEBUG POSSIBLE HERE -- dbg " > RUNNING \"$PRE_HOSTAPD_SCRIPT\" --cleanup \"$CONFDIR\" \"$BRIDGE_IFACE\""
         "$PRE_HOSTAPD_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
     fi
 
     if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
+        #NO DEBUG POSSIBLE HERE -- dbg " > RUNNING \"$PRE_DNSMASQ_SCRIPT\" --cleanup \"$CONFDIR\" \"$BRIDGE_IFACE\""
         "$PRE_DNSMASQ_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
     fi
 
