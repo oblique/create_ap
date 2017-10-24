@@ -156,6 +156,10 @@ Because only in NON-BRIDGING mode, the dnsmasq instance is launched.
   -e <hosts_file>          DNS server will take into account additional hosts file
   -g <gateway>             IPv4 Gateway for the Access Point (default: 192.168.12.1)
 
+  --run-pre-dnsmasq <file> Like --prun-pre-ap except, that <file> will be called right before launch of dnsmasq.
+                           So <file> will also be called with the same parameters than the --run-pre-ap script.
+                           So <file> will also get called with --cleanup as 1st parameter on cleanup.
+
 
 ::: USEFUL INFORMATION ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
@@ -720,7 +724,7 @@ CONFIG_OPTS="CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HI
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK
-             PRE_AP_SCRIPT"
+             PRE_AP_SCRIPT PRE_DNSMASQ_SCRIPT"
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -742,6 +746,7 @@ ROUTE_ADDRS=
 HAVEGED_WATCHDOG_PID=
 
 PRE_AP_SCRIPT=""
+PRE_DNSMASQ_SCRIPT=""
 
 _cleanup() {
     local PID x
@@ -875,6 +880,10 @@ _cleanup() {
 
     if [ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]; then
         "$PRE_AP_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
+    fi
+
+    if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
+        "$PRE_DNSMASQ_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
     fi
 
     mutex_unlock
@@ -1117,7 +1126,7 @@ done
 
 [ $# -eq 0 ] && usage
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-ap:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-dnsmasq:","run-pre-ap:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1127,9 +1136,15 @@ while :; do
         -h|--help)
             usage
             ;;
+        --run-pre-dnsmasq)
+            PRE_DNSMASQ_SCRIPT="$1"; shift
+            [ -s "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ] \
+               || err "Parameter to --run-pre-dnsmasq must be an executable file. See --help for more info."
+            ;;
         --run-pre-ap)
             PRE_AP_SCRIPT="$1"; shift
-            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] || err "Parameter to --run-pre-ap must be an executable file. See --help for more info."
+            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] \
+               || err "Parameter to --run-pre-ap must be an executable file. See --help for more info."
             ;;
         --version)
             echo $VERSION
@@ -1853,7 +1868,7 @@ else
     echo " > No Internet sharing"
 fi
 
-# start dhcp + dns (optional)
+# start dnsmasq (to supply dhcp + dns (optional))
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
@@ -1874,6 +1889,11 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
           # openSUSE's apparmor does not allow dnsmasq to read files.
           # remove restriction.
           complain dnsmasq
+      fi
+
+      if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
+          echo " > running \"$PRE_DNSMASQ_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+          "$PRE_DNSMASQ_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_DNSMASQ_SCRIPT '$PRE_DNSMASQ_SCRIPT' failed [$?]."
       fi
 
       umask 0033
