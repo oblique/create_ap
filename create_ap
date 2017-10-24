@@ -114,7 +114,8 @@ Examples:
   $PROGNAME -m bridge wlan0 br0 MyAccessPoint MyPassPhrase
   $PROGNAME --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase
   $PROGNAME --daemon wlan0 eth0 MyAccessPoint MyPassPhrase
-  $PROGNAME --stop wlan0"|less
+  $PROGNAME --stop wlan0" >&2|less
+  exit 0
 }
 
 # on success it echos a non-zero unused FD
@@ -1251,8 +1252,7 @@ fi
 # Check if required number of positional args are present
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
       $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" ]]; then
-    usage >&2
-    exit 1
+    err "Required number of positional args not present.\nPlease call with --help for more info."
 fi
 
 # Set NO_DNS, if dnsmasq is disabled
@@ -1389,16 +1389,14 @@ fi
 if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 3 && $# -ne 4 ]]; then
-            usage >&2
-            exit 1
+            err "Wrong number of arguments. Call with --help for more info."
         fi
         INTERNET_IFACE="$2"
         SSID="$3"
         PASSPHRASE="$4"
     else
         if [[ $# -ne 2 && $# -ne 3 ]]; then
-            usage >&2
-            exit 1
+            err "Wrong number of arguments. Call with --help for more info."
         fi
         SSID="$2"
         PASSPHRASE="$3"
@@ -1406,8 +1404,7 @@ if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
 else
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 2 ]]; then
-            usage >&2
-            exit 1
+            err "Wrong number of arguments. Call with --help for more info."
         fi
         INTERNET_IFACE="$2"
     fi
