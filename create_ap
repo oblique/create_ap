@@ -103,7 +103,7 @@ The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHE
                            If you use this option, we will also print the resulting hostapd.conf file.
                            So providing \"\" as <STR> allows to introspect the hostapd.conf file that will be used!
 
-  --run-pre-ap <file>      <file> will be called right before the AP is started (hostapd is called,
+  --run-pre-hostapd <file>      <file> will be called right before the AP is started (hostapd is called,
                            so dnsmasq would be already running). That means after all netwwork setup is done.
                            This gives opportunity to setup further virtual IPs for instance.
                            The script will be called with these paramters: '<CONFDIR>' '<BRIDGE_IFACE>'
@@ -168,8 +168,8 @@ Because only in NON-BRIDGING mode, the dnsmasq instance is launched.
                            If you use this option, we will also print the resulting dnsmasq.conf file.
                            So providing \"\" as <STR> allows to introspect the dnsmasq.conf file that will be used!
 
-  --run-pre-dnsmasq <file> Like --prun-pre-ap except, that <file> will be called right before launch of dnsmasq.
-                           So <file> will also be called with the same parameters than the --run-pre-ap script.
+  --run-pre-dnsmasq <file> Like --prun-pre-hostapd except, that <file> will be called right before launch of dnsmasq.
+                           So <file> will also be called with the same parameters than the --run-pre-hostapd script.
                            So <file> will also get called with --cleanup as 1st parameter on cleanup.
 
 
@@ -1141,7 +1141,7 @@ done
 
 [ $# -eq 0 ] && usage
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-dnsmasq:","run-pre-ap:","add-hostapd-conf:","add-dnsmasq-conf:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-dnsmasq:","run-pre-hostapd:","add-hostapd-conf:","add-dnsmasq-conf:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1167,11 +1167,11 @@ while :; do
             [ -s "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ] \
                || err "The parameter to --run-pre-dnsmasq must be an executable file. See --help for more info."
             ;;
-        --run-pre-ap)
+        --run-pre-hostapd)
             PRE_HOSTAPD_SCRIPT="$1"
             shift
             [ -s "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ] \
-               || err "The parameter to --run-pre-ap must be an executable file. See --help for more info."
+               || err "The parameter to --run-pre-hostapd must be an executable file. See --help for more info."
             ;;
         --version)
             echo $VERSION
