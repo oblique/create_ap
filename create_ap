@@ -1153,11 +1153,11 @@ while :; do
             ;;
 
         --add-hostapd-conf)
-            ADD_DNSMASQ_CONF="$1"
+            ADD_HOSTAPD_CONF="$1"
             shift
             ;;
         --add-dnsmasq-conf)
-            ADD_HOSTAPD_CONF="$1"
+            ADD_DNSMASQ_CONF="$1"
             shift
             ;;
 
@@ -1923,7 +1923,7 @@ $(cat "$CONFDIR/dnsmasq.conf")
 
       if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
           echo " > Running \"$PRE_DNSMASQ_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
-          "$PRE_DNSMASQ_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_DNSMASQ_SCRIPT '$PRE_DNSMASQ_SCRIPT' failed [$?]."
+          "$PRE_DNSMASQ_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE"|sed -e 's/^/   | /' || err "PRE_DNSMASQ_SCRIPT '$PRE_DNSMASQ_SCRIPT' failed [$?]."
       fi
 
       dbg "RUNNING: dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT"
@@ -1951,7 +1951,7 @@ fi
 
 if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
     echo " > Running \"$PRE_HOSTAPD_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
-    "$PRE_HOSTAPD_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_HOSTAPD_SCRIPT '$PRE_HOSTAPD_SCRIPT' failed [$?]."
+    "$PRE_HOSTAPD_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE"|sed -e 's/^/   | /' || err "PRE_HOSTAPD_SCRIPT '$PRE_HOSTAPD_SCRIPT' failed [$?]."
 fi
 
 # start access point
