@@ -651,10 +651,10 @@ USE_PSK=0
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+CONFIG_OPTS="CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK)
+             SSID PASSPHRASE USE_PSK"
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -994,7 +994,7 @@ write_config() {
         PASSPHRASE="$4"
     fi
 
-    for config_opt in "${CONFIG_OPTS[@]}"; do
+    for config_opt in $CONFIG_OPTS; do
         eval echo $config_opt=\$$config_opt
     done >> "$STORE_CONFIG"
 
@@ -1005,7 +1005,7 @@ write_config() {
 is_config_opt() {
     local elem opt="$1"
 
-    for elem in "${CONFIG_OPTS[@]}"; do
+    for elem in $CONFIG_OPTS; do
         if [[ "$elem" == "$opt" ]]; then
             return 0
         fi
