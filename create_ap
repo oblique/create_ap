@@ -1138,12 +1138,14 @@ while :; do
             usage
             ;;
         --run-pre-dnsmasq)
-            PRE_DNSMASQ_SCRIPT="$1"; shift
+            PRE_DNSMASQ_SCRIPT="$1"
+            shift
             [ -s "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ] \
                || err "Parameter to --run-pre-dnsmasq must be an executable file. See --help for more info."
             ;;
         --run-pre-ap)
-            PRE_HOSTAPD_SCRIPT="$1"; shift
+            PRE_HOSTAPD_SCRIPT="$1"
+            shift
             [ -s "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ] \
                || err "Parameter to --run-pre-ap must be an executable file. See --help for more info."
             ;;
