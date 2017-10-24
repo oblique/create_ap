@@ -54,6 +54,8 @@ Options:
                           Use: 'nat' for NAT (default)
                                'bridge' for bridging
                                'none' for no Internet sharing (equivalent to -n)
+  --pre-ap-script <file>  This script will be called right before the AP is started (hostap is called).
+                          So after all netwwork setup is done. Opportunity to setup further virtual IPs for instance.
   --psk                   Use 64 hex digits pre-shared-key instead of passphrase
   --hidden                Make the Access Point hidden (do not broadcast the SSID)
   --mac-filter            Enable MAC address filtering
@@ -673,6 +675,8 @@ ROUTE_ADDRS=
 
 HAVEGED_WATCHDOG_PID=
 
+PRE_AP_SCRIPT=""
+
 _cleanup() {
     local PID x
 
@@ -1049,7 +1053,10 @@ while :; do
     case "$1" in
         -h|--help)
             usage
-            exit 0
+            ;;
+        --pre-ap-script)
+            shift; PRE_AP_SCRIPT="$1"; shift
+            [ -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be executable."
             ;;
         --version)
             echo $VERSION
@@ -1840,13 +1847,18 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     fi
 fi
 
-# start access point
-echo " > hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
-
 if [[ $NO_HAVEGED -eq 0 ]]; then
     haveged_watchdog &
     HAVEGED_WATCHDOG_PID=$!
 fi
+
+if [[ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]]; then
+    echo " > running '$PRE_AP_SCRIPT' '$CONFDIR'"
+    "$PRE_AP_SCRIPT" "$CONFDIR" || err "PRE_AP_SCRIPT '$PRE_AP_SCRIPT' failed [$?]."
+fi
+
+# start access point
+echo " > hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 
 # start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
 stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
