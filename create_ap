@@ -1917,7 +1917,7 @@ if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
 fi
 
 # start access point
-echo " > Starting hostapd -- command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+printf " > Starting hostapd -- command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl\n\n"
 
 # start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
 dbg "RUNNING: stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &"
