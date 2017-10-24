@@ -112,7 +112,7 @@ Examples:
   $PROGNAME -m bridge wlan0 br0 MyAccessPoint MyPassPhrase
   $PROGNAME --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase
   $PROGNAME --daemon wlan0 eth0 MyAccessPoint MyPassPhrase
-  $PROGNAME --stop wlan0"
+  $PROGNAME --stop wlan0"|less
 }
 
 # on success it echos a non-zero unused FD
