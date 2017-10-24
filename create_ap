@@ -29,6 +29,16 @@ umask $SCRIPT_UMASK
 
 dbg() { [ $DBG ] || return; echo "DBG: $1" 1>&2; }
 
+warn() {
+    [[ -n "$1" ]] && printf "\nWARN: %s\n" "$1" >&2
+    exit 1
+}
+
+err() {
+    [[ -n "$1" ]] && printf "\nERROR: %s\n\n" "$1" >&2
+    exit 1
+}
+
 usage() {
 echo "Usage: $PROGNAME [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]
 
@@ -288,10 +298,10 @@ can_be_sta_and_ap() {
     # iwconfig does not provide this information, assume false
     [[ $USE_IWCONFIG -eq 1 ]] && return 1
     if [[ "$(get_adapter_kernel_module "$1")" == "brcmfmac" ]]; then
-        echo "WARN: brmfmac driver doesn't work properly with virtual interfaces and" >&2
-        echo "      it can cause kernel panic. For this reason we disallow virtual" >&2
-        echo "      interfaces for your adapter." >&2
-        echo "      For more info: https://github.com/oblique/create_ap/issues/203" >&2
+        warn "brmfmac driver doesn't work properly with virtual interfaces and
+      it can cause kernel panic. For this reason we disallow virtual
+      interfaces for your adapter.
+      For more info: https://github.com/oblique/create_ap/issues/203"
         return 1
     fi
     get_adapter_info "$1" | grep -E '{.* managed.* AP.*}' > /dev/null 2>&1 && return 0
@@ -429,11 +439,11 @@ haveged_watchdog() {
         if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
             if ! which haveged > /dev/null 2>&1; then
                 if [[ $show_warn -eq 1 ]]; then
-                    echo "WARN: Low entropy detected. We recommend you to install \`haveged'"
+                    warn "Low entropy detected. We recommend you to install \`haveged'"
                     show_warn=0
                 fi
             elif ! pidof haveged > /dev/null 2>&1; then
-                echo "Low entropy detected, starting haveged"
+                echo " > Low entropy detected, starting haveged"
                 # boost low-entropy
                 haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid
             fi
@@ -803,9 +813,9 @@ cleanup() {
     _cleanup > /dev/null 2>&1
     echo "done"
 }
-
+   
 die() {
-    [[ -n "$1" ]] && echo -e "\nERROR: $1\n" >&2
+    [[ -n "$1" ]] && printf "\nERROR: %s\n\n" "$1" >&2
     # send die signal to the main process
     [[ $BASHPID -ne $$ ]] && kill -USR2 $$
     # we don't need to call cleanup because it's traped on EXIT
@@ -967,8 +977,7 @@ write_config() {
     local i=1
 
     if ! eval 'echo -n > "$STORE_CONFIG"' > /dev/null 2>&1; then
-        echo "ERROR: Unable to create config file $STORE_CONFIG" >&2
-        exit 1
+        err "Unable to create config file $STORE_CONFIG"
     fi
 
     WIFI_IFACE=$1
@@ -985,7 +994,7 @@ write_config() {
         eval echo $config_opt=\$$config_opt
     done >> "$STORE_CONFIG"
 
-    echo -e " > Config options written to '$STORE_CONFIG'"
+    echo " > Config options written to '$STORE_CONFIG'"
     exit 0
 }
 
@@ -1011,7 +1020,7 @@ read_config() {
         if is_config_opt "$opt_name" ; then
             eval $opt_name="\$opt_val"
         else
-            echo "WARN: Unrecognized configuration entry $opt_name" >&2
+            warn "Unrecognized configuration entry $opt_name"
         fi
     done < "$LOAD_CONFIG"
 }
@@ -1026,8 +1035,7 @@ for ((i=0; i<$#; i++)); do
             LOAD_CONFIG="${ARGS[i+1]}"
             read_config
         else
-            echo "ERROR: No config file found at given location" >&2
-            exit 1
+            err "No config file found at given location"
         fi
         break
     fi
@@ -1161,7 +1169,7 @@ while :; do
         --list)
             shift
             LIST_RUNNING=1
-            echo -e "WARN: --list is deprecated, use --list-running instead.\n" >&2
+            warn "--list is deprecated, use --list-running instead."
             ;;
         --list-running)
             shift
@@ -1199,8 +1207,7 @@ while :; do
             elif [ "x$1" = "x2" ]; then
                 HOSTAPD_DEBUG_ARGS="-dd"
             else
-                printf "Error: argument for --hostapd-debug expected 1 or 2, got %s\n" "$1"
-                exit 1
+                err "argument for --hostapd-debug expected 1 or 2, got '$1'"
             fi
             shift
             ;;
@@ -1249,8 +1256,7 @@ fi
 trap "cleanup_lock" EXIT
 
 if ! init_lock; then
-    echo "ERROR: Failed to initialize lock" >&2
-    exit 1
+    err "Failed to initialize lock"
 fi
 
 # if the user press ctrl+c or we get USR1 signal
@@ -1262,7 +1268,7 @@ trap "die" SIGUSR2
 [[ -n "$STORE_CONFIG" ]] && write_config "$@"
 
 if [[ $LIST_RUNNING -eq 1 ]]; then
-    echo -e " > List of running $PROGNAME instances:\n"
+    printf " > List of running $PROGNAME instances:\n\n"
     list_running
     exit 0
 fi
@@ -1273,20 +1279,19 @@ if [[ -n "$LIST_CLIENTS_ID" ]]; then
 fi
 
 if [[ $(id -u) -ne 0 ]]; then
-    echo "You must run it as root." >&2
-    exit 1
+    err "You must run it as root."
 fi
 
 if [[ -n "$STOP_ID" ]]; then
-    echo " > Trying to kill $PROGNAME instance associated with $STOP_ID..."
+    echo " > ONLY trying to kill $PROGNAME instance associated with $STOP_ID..."
     send_stop "$STOP_ID"
-    exit 0
+    exit $?
 fi
 
 if [[ $FIX_UNMANAGED -eq 1 ]]; then
-    echo " > Trying to fix unmanaged status in NetworkManager..."
+    echo " > ONLY trying to fix unmanaged status in NetworkManager..."
     networkmanager_fix_unmanaged
-    exit 0
+    exit $?
 fi
 
 if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
@@ -1297,8 +1302,7 @@ if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
 fi
 
 if [[ $FREQ_BAND != 2.4 && $FREQ_BAND != 5 ]]; then
-    echo "ERROR: Invalid frequency band" >&2
-    exit 1
+    err "Invalid frequency band"
 fi
 
 if [[ $CHANNEL == default ]]; then
@@ -1317,21 +1321,19 @@ fi
 WIFI_IFACE=$1
 
 if ! is_wifi_interface ${WIFI_IFACE}; then
-    echo "ERROR: '${WIFI_IFACE}' is not a WiFi interface" >&2
+    err "'${WIFI_IFACE}' is not a WiFi interface"
     exit 1
 fi
 
 if ! can_be_ap ${WIFI_IFACE}; then
-    echo "ERROR: Your adapter does not support AP (master) mode" >&2
-    exit 1
+    err "Your adapter does not support AP (master) mode"
 fi
 
 if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     if is_wifi_connected ${WIFI_IFACE}; then
-        echo "ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time" >&2
-        exit 1
+        err "Your adapter can not be a station (i.e. be connected) and an AP at the same time"
     elif [[ $NO_VIRT -eq 0 ]]; then
-        echo "WARN: Your adapter does not fully support AP virtual interface, enabling --no-virt" >&2
+        warn "Your adapter does not fully support AP virtual interface, enabling --no-virt"
         NO_VIRT=1
     fi
 fi
@@ -1339,42 +1341,35 @@ fi
 HOSTAPD=$(which hostapd)
 
 if [[ ! -x "$HOSTAPD" ]]; then
-    echo "ERROR: hostapd not found." >&2
-    exit 1
+    err "hostapd not found."
 fi
 
 if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^(8192[cd][ue]|8723a[sue])$ ]]; then
     if ! strings "$HOSTAPD" | grep -m1 rtl871xdrv > /dev/null 2>&1; then
-        echo "ERROR: You need to patch your hostapd with rtl871xdrv patches." >&2
-        exit 1
+        err "You need to patch your hostapd with rtl871xdrv patches."
     fi
 
     if [[ $DRIVER != "rtl871xdrv" ]]; then
-        echo "WARN: Your adapter needs rtl871xdrv, enabling --driver=rtl871xdrv" >&2
+        warn "Your adapter needs rtl871xdrv, enabling --driver=rtl871xdrv"
         DRIVER=rtl871xdrv
     fi
 fi
 
 if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
-    echo "ERROR: Wrong Internet sharing method" >&2
-    echo
-    usage >&2
-    exit 1
+    err "Wrong Internet sharing method. Call with --help for more info."
 fi
 
 if [[ -n "$NEW_MACADDR" ]]; then
     if ! is_macaddr "$NEW_MACADDR"; then
-        echo "ERROR: '${NEW_MACADDR}' is not a valid MAC address" >&2
-        exit 1
+        err "'${NEW_MACADDR}' is not a valid MAC address"
     fi
 
     if ! is_unicast_macaddr "$NEW_MACADDR"; then
-        echo "ERROR: The first byte of MAC address (${NEW_MACADDR}) must be even" >&2
-        exit 1
+        err "The first byte of MAC address (${NEW_MACADDR}) must be even"
     fi
 
     if [[ $(get_all_macaddrs | grep -c ${NEW_MACADDR}) -ne 0 ]]; then
-        echo "WARN: MAC address '${NEW_MACADDR}' already exists. Because of this, you may encounter some problems" >&2
+        warn "MAC address '${NEW_MACADDR}' already exists. Because of this, you may encounter some problems"
     fi
 fi
 
@@ -1413,7 +1408,7 @@ else
         while :; do
             read -p "SSID: " SSID
             if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
-                echo "ERROR: Invalid SSID length ${#SSID} (expected 1..32)" >&2
+                printf "\nERROR: Invalid SSID length ${#SSID} (expected 1..32)\n" >&2
                 continue
             fi
             break
@@ -1423,13 +1418,13 @@ else
                 read -p " > Passphrase: " -s PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-                    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+                    printf "\nERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)\n" >&2
                     continue
                 fi
                 read -p " > Retype passphrase: " -s PASSPHRASE2
                 echo
                 if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
-                    echo "   Passphrases do not match."
+                    printf "\nERROR: Passphrases do not match.\n" >&2
                 else
                     break
                 fi
@@ -1437,8 +1432,7 @@ else
                 read -p " > PSK: " PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
-                    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
-                    continue
+                    err "Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)"
                 fi
             fi
         done
@@ -1449,37 +1443,31 @@ else
 fi
 
 if [[ "$SHARE_METHOD" != "none" ]] && ! is_interface $INTERNET_IFACE; then
-    echo "ERROR: '${INTERNET_IFACE}' is not an interface" >&2
-    exit 1
+    err "'${INTERNET_IFACE}' is not an interface"
 fi
 
 if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
-    echo "ERROR: Invalid SSID length ${#SSID} (expected 1..32)" >&2
-    exit 1
+    err "Invalid SSID length ${#SSID} (expected 1..32)"
 fi
 
 if [[ $USE_PSK -eq 0 ]]; then
     if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-        echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
-        exit 1
+        err "Invalid passphrase length ${#PASSPHRASE} (expected 8..63)"
     fi
 elif [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
-    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
-    exit 1
+    err "Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)"
 fi
 
 if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^rtl[0-9].*$ ]]; then
     if [[ -n "$PASSPHRASE" ]]; then
-        echo "WARN: Realtek drivers usually have problems with WPA1, enabling -w 2" >&2
+        warn "Realtek drivers usually have problems with WPA1, enabling -w 2"
         WPA_VERSION=2
     fi
-    echo "WARN: If AP doesn't work, please read: howto/realtek.md" >&2
+    warn "If AP doesn't work, please read: howto/realtek.md"
 fi
 
 if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
-    printf "ERROR: You can not share your connection from the same" >&2
-    echo " interface if you are using --no-virt option." >&2
-    exit 1
+    err "You can not share your connection from the same interface if you are using --no-virt option."
 fi
 
 mutex_lock
@@ -1866,7 +1854,7 @@ HOSTAPD_PID=$!
 echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
 
 if ! wait $HOSTAPD_PID; then
-    echo -e "\nError: Failed to run hostapd, maybe a program is interfering." >&2
+    printf "\nERROR: Failed to run hostapd, maybe a program is interfering.\n" >&2
     if networkmanager_is_running; then
         echo "If an error like 'n80211: Could not configure driver mode' was thrown" >&2
         echo "try running the following before starting create_ap:" >&2
