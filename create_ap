@@ -515,6 +515,7 @@ haveged_watchdog() {
                 fi
             elif ! pidof haveged > /dev/null 2>&1; then
                 echo " > Low entropy detected, starting haveged"
+                dbg "RUNNING: haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid"
                 # boost low-entropy
                 haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid
             fi
@@ -1798,7 +1799,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # we need the above because BRIDGE_IFACE is the master interface from now on
         # and it must know where is connected, otherwise connection is lost.
         if ! is_bridge_interface $INTERNET_IFACE; then
-            printf " > Create a bridge interface... "
+            printf " > Creating a bridge interface... "
             dbg
             OLD_IFS="$IFS"
             IFS=$'\n'
@@ -1892,10 +1893,11 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
       fi
 
       if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
-          echo " > running \"$PRE_DNSMASQ_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+          echo " > Running \"$PRE_DNSMASQ_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
           "$PRE_DNSMASQ_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_DNSMASQ_SCRIPT '$PRE_DNSMASQ_SCRIPT' failed [$?]."
       fi
 
+      dbg "RUNNING: dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT"
       umask 0033
       dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
       umask $SCRIPT_UMASK
@@ -1908,16 +1910,19 @@ if [[ $NO_HAVEGED -eq 0 ]]; then
 fi
 
 if [ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]; then
-    echo " > running \"$PRE_AP_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+    echo " > Running \"$PRE_AP_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
     "$PRE_AP_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_AP_SCRIPT '$PRE_AP_SCRIPT' failed [$?]."
 fi
 
 # start access point
-echo " > starting hostapd -- command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+echo " > Starting hostapd -- command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 
 # start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
+dbg "RUNNING: stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &"
 stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
+
 HOSTAPD_PID=$!
+dbg "SAVING HOSTAPD_PID '$HOSTAPD_PID' to '$CONFDIR/hostapd.pid'"
 echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
 
 if ! wait $HOSTAPD_PID; then
