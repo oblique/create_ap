@@ -725,7 +725,7 @@ CONFIG_OPTS="CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HI
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK
-             PRE_AP_SCRIPT PRE_DNSMASQ_SCRIPT"
+             PRE_HOSTAPD_SCRIPT PRE_DNSMASQ_SCRIPT"
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -746,7 +746,7 @@ ROUTE_ADDRS=
 
 HAVEGED_WATCHDOG_PID=
 
-PRE_AP_SCRIPT=""
+PRE_HOSTAPD_SCRIPT=""
 PRE_DNSMASQ_SCRIPT=""
 
 _cleanup() {
@@ -879,8 +879,8 @@ _cleanup() {
         networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE} ${OLD_MACADDR}
     fi
 
-    if [ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]; then
-        "$PRE_AP_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
+    if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
+        "$PRE_HOSTAPD_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
     fi
 
     if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
@@ -1143,8 +1143,8 @@ while :; do
                || err "Parameter to --run-pre-dnsmasq must be an executable file. See --help for more info."
             ;;
         --run-pre-ap)
-            PRE_AP_SCRIPT="$1"; shift
-            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] \
+            PRE_HOSTAPD_SCRIPT="$1"; shift
+            [ -s "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ] \
                || err "Parameter to --run-pre-ap must be an executable file. See --help for more info."
             ;;
         --version)
@@ -1909,9 +1909,9 @@ if [[ $NO_HAVEGED -eq 0 ]]; then
     HAVEGED_WATCHDOG_PID=$!
 fi
 
-if [ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]; then
-    echo " > Running \"$PRE_AP_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
-    "$PRE_AP_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_AP_SCRIPT '$PRE_AP_SCRIPT' failed [$?]."
+if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
+    echo " > Running \"$PRE_HOSTAPD_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+    "$PRE_HOSTAPD_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_HOSTAPD_SCRIPT '$PRE_HOSTAPD_SCRIPT' failed [$?]."
 fi
 
 # start access point
