@@ -97,6 +97,12 @@ The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHE
 
   --no-haveged             Do not run 'haveged' automatically when needed
 
+  --add-hostapd-conf <STR> The output of 'printf <STR>' will be appended to the hostapd.conf config file
+                           that is created by this script. So <STR> can contain '\\n' for newlines (see 'man printf').
+                           This happens right before hostapd is launched.
+                           If you use this option, we will also print the resulting hostapd.conf file.
+                           So providing \"\" as <STR> allows to introspect the hostapd.conf file that will be used!
+
   --run-pre-ap <file>      <file> will be called right before the AP is started (hostapd is called,
                            so dnsmasq would be already running). That means after all netwwork setup is done.
                            This gives opportunity to setup further virtual IPs for instance.
@@ -155,6 +161,12 @@ Because only in NON-BRIDGING mode, the dnsmasq instance is launched.
   -d                       DNS server will take into account /etc/hosts
   -e <hosts_file>          DNS server will take into account additional hosts file
   -g <gateway>             IPv4 Gateway for the Access Point (default: 192.168.12.1)
+
+  --add-dnsmasq-conf <STR> The output of 'printf <STR>' will be appended to the dnsmasq.conf config file
+                           that is created by this script. So <STR> can contain '\\n' for newlines (see 'man printf').
+                           This happens right before dnsmasq is launched.
+                           If you use this option, we will also print the resulting dnsmasq.conf file.
+                           So providing \"\" as <STR> allows to introspect the dnsmasq.conf file that will be used!
 
   --run-pre-dnsmasq <file> Like --prun-pre-ap except, that <file> will be called right before launch of dnsmasq.
                            So <file> will also be called with the same parameters than the --run-pre-ap script.
@@ -725,7 +737,7 @@ CONFIG_OPTS="CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HI
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK
-             PRE_HOSTAPD_SCRIPT PRE_DNSMASQ_SCRIPT"
+             PRE_HOSTAPD_SCRIPT PRE_DNSMASQ_SCRIPT ADD_DNSMASQ_CONF ADD_HOSTAPD_CONF"
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -748,6 +760,8 @@ HAVEGED_WATCHDOG_PID=
 
 PRE_HOSTAPD_SCRIPT=""
 PRE_DNSMASQ_SCRIPT=""
+ADD_DNSMASQ_CONF="none" # to be able to recognize a specifically provided empty parameter to --add-dnsmasq-conf ! 
+ADD_HOSTAPD_CONF="none" # to be able to recognize a specifically provided empty parameter to --add-hostapd-conf ! 
 
 _cleanup() {
     local PID x
@@ -1127,7 +1141,7 @@ done
 
 [ $# -eq 0 ] && usage
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-dnsmasq:","run-pre-ap:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-dnsmasq:","run-pre-ap:","add-hostapd-conf:","add-dnsmasq-conf:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1137,6 +1151,16 @@ while :; do
         -h|--help)
             usage
             ;;
+
+        --add-hostapd-conf)
+            ADD_DNSMASQ_CONF="$1"
+            shift
+            ;;
+        --add-dnsmasq-conf)
+            ADD_HOSTAPD_CONF="$1"
+            shift
+            ;;
+
         --run-pre-dnsmasq)
             PRE_DNSMASQ_SCRIPT="$1"
             shift
@@ -1715,10 +1739,6 @@ rsn_pairwise=CCMP
 EOF
 fi
 
-dbg "$CONFDIR/hostapd.conf:
-$(cat "$CONFDIR/hostapd.conf")
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
 elif [[ $NO_DNSMASQ -eq 0 ]]; then
@@ -1751,10 +1771,6 @@ address=/#/$GATEWAY
 EOF
     fi
 fi
-
-dbg "$CONFDIR/dnsmasq.conf:
-$(cat "$CONFDIR/dnsmasq.conf")
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
 
 # initialize WiFi interface
 if [[ $NO_VIRT -eq 0 && -n "$NEW_MACADDR" ]]; then
@@ -1894,6 +1910,17 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
           complain dnsmasq
       fi
 
+      if [ "$ADD_DNSMASQ_CONF" != "none" ]; then
+          printf "$ADD_DNSMASQ_CONF" >>"$CONFDIR/dnsmasq.conf"
+          echo " > Using this dnsmasq.conf: (temporarily stored in above Config dir)
+$(cat "$CONFDIR/dnsmasq.conf"|sed -e 's/^/   | /')"
+
+      else
+          dbg "$CONFDIR/dnsmasq.conf:
+$(cat "$CONFDIR/dnsmasq.conf")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      fi
+
       if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
           echo " > Running \"$PRE_DNSMASQ_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
           "$PRE_DNSMASQ_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_DNSMASQ_SCRIPT '$PRE_DNSMASQ_SCRIPT' failed [$?]."
@@ -1909,6 +1936,17 @@ fi
 if [[ $NO_HAVEGED -eq 0 ]]; then
     haveged_watchdog &
     HAVEGED_WATCHDOG_PID=$!
+fi
+
+if [ "$ADD_HOSTAPD_CONF" != "none" ]; then
+    printf "$ADD_HOSTAPD_CONF" >>"$CONFDIR/hostapd.conf"
+    echo " > Using this hostapd.conf: (temporarily stored in above Config dir)
+$(cat "$CONFDIR/hostapd.conf"|sed -e 's/^/   | /')"
+
+else
+    dbg "$CONFDIR/hostapd.conf:
+$(cat "$CONFDIR/hostapd.conf")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
 fi
 
 if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
