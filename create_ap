@@ -907,7 +907,7 @@ list_clients() {
         local client_list=$(iw dev "$wifi_iface" station dump | awk "$awk_cmd")
 
         if [[ -z "$client_list" ]]; then
-            echo "No clients connected"
+            echo " > No clients connected"
             return
         fi
 
@@ -985,7 +985,7 @@ write_config() {
         eval echo $config_opt=\$$config_opt
     done >> "$STORE_CONFIG"
 
-    echo -e "Config options written to '$STORE_CONFIG'"
+    echo -e " > Config options written to '$STORE_CONFIG'"
     exit 0
 }
 
@@ -1262,7 +1262,7 @@ trap "die" SIGUSR2
 [[ -n "$STORE_CONFIG" ]] && write_config "$@"
 
 if [[ $LIST_RUNNING -eq 1 ]]; then
-    echo -e "List of running $PROGNAME instances:\n"
+    echo -e " > List of running $PROGNAME instances:\n"
     list_running
     exit 0
 fi
@@ -1278,19 +1278,19 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 
 if [[ -n "$STOP_ID" ]]; then
-    echo "Trying to kill $PROGNAME instance associated with $STOP_ID..."
+    echo " > Trying to kill $PROGNAME instance associated with $STOP_ID..."
     send_stop "$STOP_ID"
     exit 0
 fi
 
 if [[ $FIX_UNMANAGED -eq 1 ]]; then
-    echo "Trying to fix unmanaged status in NetworkManager..."
+    echo " > Trying to fix unmanaged status in NetworkManager..."
     networkmanager_fix_unmanaged
     exit 0
 fi
 
 if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
-    echo "Running as Daemon..."
+    echo " > Running as Daemon..."
     # run a detached create_ap
     RUNNING_AS_DAEMON=1 setsid "$0" "${ARGS[@]}" &
     exit 0
@@ -1310,7 +1310,7 @@ if [[ $CHANNEL == default ]]; then
 fi
 
 if [[ $FREQ_BAND != 5 && $CHANNEL -gt 14 ]]; then
-    echo "Channel number is greater than 14, assuming 5GHz frequency band"
+    echo "> Channel number is greater than 14, assuming 5GHz frequency band"
     FREQ_BAND=5
 fi
 
@@ -1420,21 +1420,21 @@ else
         done
         while :; do
             if [[ $USE_PSK -eq 0 ]]; then
-                read -p "Passphrase: " -s PASSPHRASE
+                read -p " > Passphrase: " -s PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
                     echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
                     continue
                 fi
-                read -p "Retype passphrase: " -s PASSPHRASE2
+                read -p " > Retype passphrase: " -s PASSPHRASE2
                 echo
                 if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
-                    echo "Passphrases do not match."
+                    echo "   Passphrases do not match."
                 else
                     break
                 fi
             else
-                read -p "PSK: " PASSPHRASE
+                read -p " > PSK: " PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
                     echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
@@ -1477,7 +1477,7 @@ if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^rtl[0-9].*$ ]]; then
 fi
 
 if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
-    echo -n "ERROR: You can not share your connection from the same" >&2
+    printf "ERROR: You can not share your connection from the same" >&2
     echo " interface if you are using --no-virt option." >&2
     exit 1
 fi
@@ -1485,8 +1485,8 @@ fi
 mutex_lock
 trap "cleanup" EXIT
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
-echo "Config dir: $CONFDIR"
-echo "PID: $$"
+echo " > Config dir: $CONFDIR"
+echo " > PID: $$"
 echo $$ > $CONFDIR/pid
 
 # to make --list-running work from any user, we must give read
@@ -1526,7 +1526,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
     # in NetworkManager 0.9.9 and above we can set the interface as unmanaged without
     # the need of MAC address, so we set it before we create the virtual interface.
     if networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]]; then
-        echo -n "Network Manager found, set ${VWIFI_IFACE} as unmanaged device... "
+        printf " > Network Manager found, set ${VWIFI_IFACE} as unmanaged device... "
         networkmanager_add_unmanaged ${VWIFI_IFACE}
         # do not call networkmanager_wait_until_unmanaged because interface does not
         # exist yet
@@ -1536,7 +1536,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
     if is_wifi_connected ${WIFI_IFACE}; then
         WIFI_IFACE_FREQ=$(iw dev ${WIFI_IFACE} link | grep -i freq | awk '{print $2}')
         WIFI_IFACE_CHANNEL=$(ieee80211_frequency_to_channel ${WIFI_IFACE_FREQ})
-        echo -n "${WIFI_IFACE} is already associated with channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
+        printf " > ${WIFI_IFACE} is already associated with channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
         if is_5ghz_frequency $WIFI_IFACE_FREQ; then
             FREQ_BAND=5
         else
@@ -1552,7 +1552,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
 
     VIRTDIEMSG="Maybe your WiFi adapter does not fully support virtual interfaces.
        Try again with --no-virt."
-    echo -n "Creating a virtual WiFi interface... "
+    printf " > Creating a virtual WiFi interface... "
 
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
         # now we can call networkmanager_wait_until_unmanaged
@@ -1583,7 +1583,7 @@ fi
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
 
 if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
-    echo -n "Network Manager found, set ${WIFI_IFACE} as unmanaged device... "
+    printf " > Network Manager found, set ${WIFI_IFACE} as unmanaged device... "
     networkmanager_add_unmanaged ${WIFI_IFACE}
 
     if networkmanager_is_running; then
@@ -1593,11 +1593,11 @@ if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; t
     echo "DONE"
 fi
 
-[[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
+[[ $HIDDEN -eq 1 ]] && echo " > Access Point's SSID is hidden!"
 
-[[ $MAC_FILTER -eq 1 ]] && echo "MAC address filtering is enabled!"
+[[ $MAC_FILTER -eq 1 ]] && echo " > MAC address filtering is enabled!"
 
-[[ $ISOLATE_CLIENTS -eq 1 ]] && echo "Access Point's clients will be isolated!"
+[[ $ISOLATE_CLIENTS -eq 1 ]] && echo " > Access Point's clients will be isolated!"
 
 # hostapd config
 cat << EOF > $CONFDIR/hostapd.conf
@@ -1727,7 +1727,7 @@ fi
 
 # enable Internet sharing
 if [[ "$SHARE_METHOD" != "none" ]]; then
-    echo "Sharing Internet using method: $SHARE_METHOD"
+    echo " > Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
         iptables -w -t nat -I POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE || die
         iptables -w -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
@@ -1753,7 +1753,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # we need the above because BRIDGE_IFACE is the master interface from now on
         # and it must know where is connected, otherwise connection is lost.
         if ! is_bridge_interface $INTERNET_IFACE; then
-            echo -n "Create a bridge interface... "
+            printf " > Create a bridge interface... "
             dbg
             OLD_IFS="$IFS"
             IFS=$'\n'
@@ -1820,7 +1820,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         fi
     fi
 else
-    echo "No Internet sharing"
+    echo " > No Internet sharing"
 fi
 
 # start dhcp + dns (optional)
@@ -1853,7 +1853,7 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
 fi
 
 # start access point
-echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+echo " > hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 
 if [[ $NO_HAVEGED -eq 0 ]]; then
     haveged_watchdog &
