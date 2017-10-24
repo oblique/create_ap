@@ -57,8 +57,14 @@ Options:
                           Use: 'nat' for NAT (default)
                                'bridge' for bridging
                                'none' for no Internet sharing (equivalent to -n)
-  --pre-ap-script <file>  This script will be called right before the AP is started (hostap is called).
-                          So after all netwwork setup is done. Opportunity to setup further virtual IPs for instance.
+  --pre-ap-script <file>  This script will be called right before the AP is started (hostap is called,
+                          so dnsmasqd would be already running). That means after all netwwork setup is done.
+                          This gives opportunity to setup further virtual IPs for instance.
+                          The script will be called with these paramters: '<CONFDIR>' '<BRIDGE_IFACE>'
+                               '<CONFDIR>' containing hostapd.conf and potentially dnsmasqd.conf
+                               '<BRIDGE_IFACE>' can be empty if there is no bridge (so the -m <method> is NOT 'bridge')
+                          On exit / cleanup the script will be called again with '--cleanup' as 1st parameter,
+                          followed by the same parameters than before.
   --psk                   Use 64 hex digits pre-shared-key instead of passphrase
   --hidden                Make the Access Point hidden (do not broadcast the SSID)
   --mac-filter            Enable MAC address filtering
@@ -811,6 +817,10 @@ _cleanup() {
         networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE} ${OLD_MACADDR}
     fi
 
+    if [ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]; then
+        "$PRE_AP_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
+    fi
+
     mutex_unlock
     cleanup_lock
 }
@@ -1051,7 +1061,7 @@ done
 
 [ $# -eq 0 ] && usage
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","pre-ap-script:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1063,7 +1073,7 @@ while :; do
             ;;
         --pre-ap-script)
             PRE_AP_SCRIPT="$1"; shift
-            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be executable."
+            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be an executable file. See --help for more info."
             ;;
         --version)
             echo $VERSION
@@ -1821,13 +1831,13 @@ if [[ $NO_HAVEGED -eq 0 ]]; then
     HAVEGED_WATCHDOG_PID=$!
 fi
 
-if [[ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]]; then
-    echo " > running '$PRE_AP_SCRIPT' '$CONFDIR'"
-    "$PRE_AP_SCRIPT" "$CONFDIR" || err "PRE_AP_SCRIPT '$PRE_AP_SCRIPT' failed [$?]."
+if [ -n "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ]; then
+    echo " > running \"$PRE_AP_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+    "$PRE_AP_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE" || err "PRE_AP_SCRIPT '$PRE_AP_SCRIPT' failed [$?]."
 fi
 
 # start access point
-echo " > hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+echo " > starting hostapd -- command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
 
 # start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
 stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
