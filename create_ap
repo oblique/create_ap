@@ -1063,7 +1063,7 @@ while :; do
             ;;
         --pre-ap-script)
             PRE_AP_SCRIPT="$1"; shift
-            [ -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be executable."
+            [ -s "$PRE_AP_SCRIPT" -a -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be executable."
             ;;
         --version)
             echo $VERSION
