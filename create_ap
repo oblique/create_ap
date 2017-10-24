@@ -27,15 +27,18 @@ export LC_ALL=C
 SCRIPT_UMASK=0077
 umask $SCRIPT_UMASK
 
-dbg() { [ $DBG ] || return; echo "DBG: $1" 1>&2; }
+dbg() {
+    [ $DBG ] || return
+    echo "DBG: $1" >&2
+}
 
 warn() {
-    [[ -n "$1" ]] && printf "\nWARN: %s\n" "$1" >&2
+    [[ -n "$1" ]] && printf "\nWARNING:\n$1\n" >&2
     exit 1
 }
 
 err() {
-    [[ -n "$1" ]] && printf "\nERROR: %s\n\n" "$1" >&2
+    [[ -n "$1" ]] && printf "\nERROR:\n$1\n\n" >&2
     exit 1
 }
 
@@ -114,7 +117,7 @@ Examples:
   $PROGNAME -m bridge wlan0 br0 MyAccessPoint MyPassPhrase
   $PROGNAME --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase
   $PROGNAME --daemon wlan0 eth0 MyAccessPoint MyPassPhrase
-  $PROGNAME --stop wlan0" >&2|less
+  $PROGNAME --stop wlan0"|less
   exit 0
 }
 
@@ -302,9 +305,9 @@ can_be_sta_and_ap() {
     [[ $USE_IWCONFIG -eq 1 ]] && return 1
     if [[ "$(get_adapter_kernel_module "$1")" == "brcmfmac" ]]; then
         warn "brmfmac driver doesn't work properly with virtual interfaces and
-      it can cause kernel panic. For this reason we disallow virtual
-      interfaces for your adapter.
-      For more info: https://github.com/oblique/create_ap/issues/203"
+it can cause kernel panic. For this reason we disallow virtual
+interfaces for your adapter.
+For more info: https://github.com/oblique/create_ap/issues/203"
         return 1
     fi
     get_adapter_info "$1" | grep -E '{.* managed.* AP.*}' > /dev/null 2>&1 && return 0
@@ -1045,6 +1048,8 @@ for ((i=0; i<$#; i++)); do
         break
     fi
 done
+
+[ $# -eq 0 ] && usage
 
 GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
