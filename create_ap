@@ -1232,6 +1232,8 @@ while :; do
             shift
             break
             ;;
+        *)  err "Unknown argument '$1'. Please call with --help for more info."
+            ;;
     esac
 done
 
