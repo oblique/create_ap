@@ -16,6 +16,7 @@
 
 VERSION=0.4.6
 PROGNAME="$(basename $0)"
+DBG=1; # DBG=; # == OFF   # DBG=1; # == ON
 
 # make sure that all command outputs are in english
 # so we can parse them correctly
@@ -25,6 +26,8 @@ export LC_ALL=C
 # in special cases we must use chmod to give any other permissions.
 SCRIPT_UMASK=0077
 umask $SCRIPT_UMASK
+
+dbg() { [ $DBG ] || return; echo "DBG: $1" 1>&2; }
 
 usage() {
 echo "Usage: $PROGNAME [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]
@@ -37,6 +40,7 @@ Options:
   -n                      Disable Internet sharing (if you use this, don't pass
                           the <interface-with-internet> argument)
   -m <method>             Method for Internet sharing.
+                          The methods 'nat' and 'none' will launch a dnsmasq instance (serving dns and dhcp).
                           Use: 'nat' for NAT (default)
                                'bridge' for bridging
                                'none' for no Internet sharing (equivalent to -n)
@@ -243,6 +247,8 @@ is_wifi_interface() {
 
 is_bridge_interface() {
     [[ -z "$1" ]] && return 1
+    #dbg "is_bridge_interface: Chcking existance of directory '/sys/class/net/${1}/bridge' ($(ls "/sys/class/net/${1}/bridge"))..."
+    dbg "is_bridge_interface: Chcking existance of directory '/sys/class/net/${1}/bridge'..."
     [[ -d "/sys/class/net/${1}/bridge" ]]
 }
 
@@ -1661,6 +1667,10 @@ rsn_pairwise=CCMP
 EOF
 fi
 
+dbg "$CONFDIR/hostapd.conf:
+$(cat "$CONFDIR/hostapd.conf")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+
 if [[ "$SHARE_METHOD" == "bridge" ]]; then
     echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
 elif [[ $NO_DNSMASQ -eq 0 ]]; then
@@ -1682,6 +1692,7 @@ dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option-force=option:router,${GATEWAY}
 dhcp-option-force=option:dns-server,${DHCP_DNS}
 EOF
+
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
@@ -1692,6 +1703,10 @@ address=/#/$GATEWAY
 EOF
     fi
 fi
+
+dbg "$CONFDIR/dnsmasq.conf:
+$(cat "$CONFDIR/dnsmasq.conf")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
 
 # initialize WiFi interface
 if [[ $NO_VIRT -eq 0 && -n "$NEW_MACADDR" ]]; then
@@ -1739,6 +1754,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # and it must know where is connected, otherwise connection is lost.
         if ! is_bridge_interface $INTERNET_IFACE; then
             echo -n "Create a bridge interface... "
+            dbg
             OLD_IFS="$IFS"
             IFS=$'\n'
 
@@ -1753,16 +1769,22 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
             fi
 
             # create bridge interface
+            dbg "ip link add name $BRIDGE_IFACE type bridge || die"
             ip link add name $BRIDGE_IFACE type bridge || die
+            dbg "ip link set dev $BRIDGE_IFACE up || die"
             ip link set dev $BRIDGE_IFACE up || die
             # set 0ms forward delay
             echo 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
 
             # attach internet interface to bridge interface
+            dbg "ip link set dev $INTERNET_IFACE promisc on || die"
             ip link set dev $INTERNET_IFACE promisc on || die
+            dbg "ip link set dev $INTERNET_IFACE up || die"
             ip link set dev $INTERNET_IFACE up || die
+            dbg "ip link set dev $INTERNET_IFACE master $BRIDGE_IFACE || die"
             ip link set dev $INTERNET_IFACE master $BRIDGE_IFACE || die
 
+            dbg "ip addr flush $INTERNET_IFACE"
             ip addr flush $INTERNET_IFACE
             for x in "${IP_ADDRS[@]}"; do
                 x="${x/inet/}"
@@ -1770,22 +1792,27 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
                 x="${x/dynamic/}"
                 x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
                 x="${x/${INTERNET_IFACE}/}"
+                dbg "ip addr add $x dev $BRIDGE_IFACE || die"
                 ip addr add $x dev $BRIDGE_IFACE || die
             done
 
             # remove any existing entries that were added from 'ip addr add'
+            dbg "ip route flush dev $INTERNET_IFACE"
             ip route flush dev $INTERNET_IFACE
+            dbg "ip route flush dev $BRIDGE_IFACE"
             ip route flush dev $BRIDGE_IFACE
 
             # we must first add the entries that specify the subnets and then the
             # gateway entry, otherwise 'ip addr add' will return an error
             for x in "${ROUTE_ADDRS[@]}"; do
                 [[ "$x" == default* ]] && continue
+                dbg "ip route add $x dev $BRIDGE_IFACE || die"
                 ip route add $x dev $BRIDGE_IFACE || die
             done
 
             for x in "${ROUTE_ADDRS[@]}"; do
                 [[ "$x" != default* ]] && continue
+                dbg "ip route add $x dev $BRIDGE_IFACE || die"
                 ip route add $x dev $BRIDGE_IFACE || die
             done
 
