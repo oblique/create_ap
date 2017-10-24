@@ -16,7 +16,7 @@
 
 VERSION=0.4.6
 PROGNAME="$(basename $0)"
-DBG=1; # DBG=; # == OFF   # DBG=1; # == ON
+DBG=; # DBG=; # == OFF   # DBG=1; # == ON
 
 # make sure that all command outputs are in english
 # so we can parse them correctly
