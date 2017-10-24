@@ -1056,12 +1056,13 @@ GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redir
 eval set -- "$GETOPT_ARGS"
 
 while :; do
-    case "$1" in
+    arg="$1"; shift
+    case "$arg" in
         -h|--help)
             usage
             ;;
         --pre-ap-script)
-            shift; PRE_AP_SCRIPT="$1"; shift
+            PRE_AP_SCRIPT="$1"; shift
             [ -x "$PRE_AP_SCRIPT" ] || err "Parameter to --pre-ap-script must be executable."
             ;;
         --version)
@@ -1069,152 +1070,119 @@ while :; do
             exit 0
             ;;
         --hidden)
-            shift
             HIDDEN=1
             ;;
         --mac-filter)
-            shift
             MAC_FILTER=1
             ;;
         --mac-filter-accept)
-            shift
             MAC_FILTER_ACCEPT="$1"
             shift
             ;;
         --isolate-clients)
-            shift
             ISOLATE_CLIENTS=1
             ;;
         -c)
-            shift
             CHANNEL="$1"
             shift
             ;;
         -w)
-            shift
             WPA_VERSION="$1"
             [[ "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=1+2
             shift
             ;;
         -g)
-            shift
             GATEWAY="$1"
             shift
             ;;
         -d)
-            shift
             ETC_HOSTS=1
             ;;
         -e)
-            shift
             ADDN_HOSTS="$1"
             shift
             ;;
         -n)
-            shift
             SHARE_METHOD=none
             ;;
         -m)
-            shift
             SHARE_METHOD="$1"
             shift
             ;;
         --ieee80211n)
-            shift
             IEEE80211N=1
             ;;
         --ieee80211ac)
-            shift
             IEEE80211AC=1
             ;;
         --ht_capab)
-            shift
             HT_CAPAB="$1"
             shift
             ;;
         --vht_capab)
-            shift
             VHT_CAPAB="$1"
             shift
             ;;
         --driver)
-            shift
             DRIVER="$1"
             shift
             ;;
         --no-virt)
-            shift
             NO_VIRT=1
             ;;
         --fix-unmanaged)
-            shift
             FIX_UNMANAGED=1
             ;;
         --country)
-            shift
             COUNTRY="$1"
             shift
             ;;
         --freq-band)
-            shift
             FREQ_BAND="$1"
             shift
             ;;
         --mac)
-            shift
             NEW_MACADDR="$1"
             shift
             ;;
         --dhcp-dns)
-            shift
             DHCP_DNS="$1"
             shift
             ;;
         --daemon)
-            shift
             DAEMONIZE=1
             ;;
         --stop)
-            shift
             STOP_ID="$1"
             shift
             ;;
         --list)
-            shift
             LIST_RUNNING=1
             warn "--list is deprecated, use --list-running instead."
             ;;
         --list-running)
-            shift
             LIST_RUNNING=1
             ;;
         --list-clients)
-            shift
             LIST_CLIENTS_ID="$1"
             shift
             ;;
         --no-haveged)
-            shift
             NO_HAVEGED=1
             ;;
         --psk)
-            shift
             USE_PSK=1
             ;;
         --no-dns)
-            shift
             NO_DNS=1
             ;;
         --no-dnsmasq)
-            shift
             NO_DNSMASQ=1
             ;;
         --redirect-to-localhost)
-            shift
             REDIRECT_TO_LOCALHOST=1
             ;;
         --hostapd-debug)
-            shift
             if [ "x$1" = "x1" ]; then
                 HOSTAPD_DEBUG_ARGS="-d"
             elif [ "x$1" = "x2" ]; then
@@ -1225,16 +1193,13 @@ while :; do
             shift
             ;;
         --mkconfig)
-            shift
             STORE_CONFIG="$1"
             shift
             ;;
         --config)
             shift
-            shift
             ;;
         --)
-            shift
             break
             ;;
         *)  err "Unknown argument '$1'. Please call with --help for more info."
