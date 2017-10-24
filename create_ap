@@ -16,6 +16,7 @@
 
 VERSION=0.4.6
 PROGNAME="$(basename $0)"
+DBG=; # DBG=; # == OFF   # DBG=1; # == ON
 
 # make sure that all command outputs are in english
 # so we can parse them correctly
@@ -26,79 +27,175 @@ export LC_ALL=C
 SCRIPT_UMASK=0077
 umask $SCRIPT_UMASK
 
+dbg() {
+    [ $DBG ] || return
+    echo "DBG: $1" >&2
+}
+
+warn() {
+    [[ -n "$1" ]] && printf "\nWARNING:\n$1\n" >&2
+    exit 1
+}
+
+err() {
+    [[ -n "$1" ]] && printf "\nERROR:\n$1\n\n" >&2
+    exit 1
+}
+
 usage() {
-    echo "Usage: "$PROGNAME" [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
-    echo
-    echo "Options:"
-    echo "  -h, --help              Show this help"
-    echo "  --version               Print version number"
-    echo "  -c <channel>            Channel number (default: 1)"
-    echo "  -w <WPA version>        Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
-    echo "  -n                      Disable Internet sharing (if you use this, don't pass"
-    echo "                          the <interface-with-internet> argument)"
-    echo "  -m <method>             Method for Internet sharing."
-    echo "                          Use: 'nat' for NAT (default)"
-    echo "                               'bridge' for bridging"
-    echo "                               'none' for no Internet sharing (equivalent to -n)"
-    echo "  --psk                   Use 64 hex digits pre-shared-key instead of passphrase"
-    echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
-    echo "  --mac-filter            Enable MAC address filtering"
-    echo "  --mac-filter-accept     Location of MAC address filter list (defaults to /etc/hostapd/hostapd.accept)"
-    echo "  --redirect-to-localhost If -n is set, redirect every web request to localhost (useful for public information networks)"
-    echo "  --hostapd-debug <level> With level between 1 and 2, passes arguments -d or -dd to hostapd for debugging."
-    echo "  --isolate-clients       Disable communication between clients"
-    echo "  --ieee80211n            Enable IEEE 802.11n (HT)"
-    echo "  --ieee80211ac           Enable IEEE 802.11ac (VHT)"
-    echo "  --ht_capab <HT>         HT capabilities (default: [HT40+])"
-    echo "  --vht_capab <VHT>       VHT capabilities"
-    echo "  --country <code>        Set two-letter country code for regularity (example: US)"
-    echo "  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
-    echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
-    echo "  --no-virt               Do not create virtual interface"
-    echo "  --no-haveged            Do not run 'haveged' automatically when needed"
-    echo "  --fix-unmanaged         If NetworkManager shows your interface as unmanaged after you"
-    echo "                          close create_ap, then use this option to switch your interface"
-    echo "                          back to managed"
-    echo "  --mac <MAC>             Set MAC address"
-    echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
-    echo "  --daemon                Run create_ap in the background"
-    echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
-    echo "                          you can put the PID of create_ap or the WiFi interface. You can"
-    echo "                          get them with --list-running"
-    echo "  --list-running          Show the create_ap processes that are already running"
-    echo "  --list-clients <id>     List the clients connected to create_ap instance associated with <id>."
-    echo "                          For an <id> you can put the PID of create_ap or the WiFi interface."
-    echo "                          If virtual WiFi interface was created, then use that one."
-    echo "                          You can get them with --list-running"
-    echo "  --mkconfig <conf_file>  Store configs in conf_file"
-    echo "  --config <conf_file>    Load configs from conf_file"
-    echo
-    echo "Non-Bridging Options:"
-    echo "  --no-dns                Disable dnsmasq DNS server"
-    echo "  --no-dnsmasq            Disable dnsmasq server completely"
-    echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
-    echo "  -d                      DNS server will take into account /etc/hosts"
-    echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
-    echo
-    echo "Useful informations:"
-    echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
-    echo "    interface you are getting your Internet connection."
-    echo "  * You can pass your SSID and password through pipe or through arguments (see examples)."
-    echo "  * On bridge method if the <interface-with-internet> is not a bridge interface, then"
-    echo "    a bridge interface is created automatically."
-    echo
-    echo "Examples:"
-    echo "  "$PROGNAME" wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | "$PROGNAME" wlan0 eth0"
-    echo "  "$PROGNAME" wlan0 eth0 MyAccessPoint"
-    echo "  echo 'MyAccessPoint' | "$PROGNAME" wlan0 eth0"
-    echo "  "$PROGNAME" wlan0 wlan0 MyAccessPoint MyPassPhrase"
-    echo "  "$PROGNAME" -n wlan0 MyAccessPoint MyPassPhrase"
-    echo "  "$PROGNAME" -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  "$PROGNAME" -m bridge wlan0 br0 MyAccessPoint MyPassPhrase"
-    echo "  "$PROGNAME" --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  "$PROGNAME" --daemon wlan0 eth0 MyAccessPoint MyPassPhrase"
-    echo "  "$PROGNAME" --stop wlan0"
+echo "Usage: $PROGNAME [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]
+
+This script will create a local access point launching a hostapd instance.
+See the \"HOSTAPD SPECIFIC OPTIONS\" section below.
+Starting hostapd is the default task of this script. There are a few other possible tasks.
+See the \"OPTIONS FOR OTHER TASKS\" section below.
+
+If low entropy is detected (looking at /proc/sys/kernel/random/entropy_avail),
+haveged is started (if it is available) to provide good entropy to hostapd!
+See the --no-haveged parameter under \"GENERAL OPTIONS\" section below.
+
+Optionally also a dnsmasq server will be launched, taking care of DHCP requests
+and if not disabled also of DNS.
+See the \"NON-BRIDGING OPTIONS\" section below.
+
+
+:::: OPTIONS ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+GENERAL OPTIONS:
+  -h, --help              Show this help
+  --version               Print version number
+  --config <conf_file>    Load all OPTIONS provided to this script from conf_file.
+                          See the --mkconfig option on how to create the conf_file.
+
+  -n                      Disable Internet sharing (if you use this, don't pass
+                          the <interface-with-internet> argument), shortcut OPTION for '-m none'
+  -m <method>             Method for Internet sharing.
+                          The methods 'nat' and 'none' will launch a dnsmasq instance (serving dns and dhcp).
+                          Use: 'nat' for NAT (default)
+                               'bridge' for bridging
+                               'none' for no Internet sharing (equivalent to -n)
+
+OPTIONS FOR OTHER TASKS:
+
+The default task for this script is to launch a hostapd instance. But this script can do more.
+The following options are meant to be used one at a time (mutually exclusive).
+They will have this script do something OTHER than running hostapd.
+
+  --fix-unmanaged          If NetworkManager shows your interface as unmanaged after you
+                           close create_ap, then use this option to switch your interface
+                           back to managed and exit.
+
+  --mkconfig <conf_file>   Store configs in conf_file and exit.
+                           See --config option on how to use a conf_file.
+
+HOSTAPD SPECIFIC OPTIONS:
+
+The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHER TASKS\" section).
+
+  --no-virt                Do not create virtual interface
+  --mac <MAC>              Set (attempt to change) the MAC address of the provided <wifi-interface>.
+
+  --no-haveged             Do not run 'haveged' automatically when needed
+
+  --add-hostapd-conf <STR> The output of 'printf <STR>' will be appended to the hostapd.conf config file
+                           that is created by this script. So <STR> can contain '\\n' for newlines (see 'man printf').
+                           This happens right before hostapd is launched.
+                           If you use this option, we will also print the resulting hostapd.conf file.
+                           So providing \"\" as <STR> allows to introspect the hostapd.conf file that will be used!
+
+  --run-pre-hostapd <file>      <file> will be called right before the AP is started (hostapd is called,
+                           so dnsmasq would be already running). That means after all netwwork setup is done.
+                           This gives opportunity to setup further virtual IPs for instance.
+                           The script will be called with these paramters: '<CONFDIR>' '<BRIDGE_IFACE>'
+                               '<CONFDIR>' containing hostapd.conf and potentially dnsmasq.conf
+                               '<BRIDGE_IFACE>' can be empty if there is no bridge (so the -m <method> is NOT 'bridge')
+                           On exit / cleanup the script will be called again with '--cleanup' as 1st parameter,
+                           followed by the same parameters than before.
+
+Directly influence the hostapd.conf content:
+
+  -w <WPA version>         Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)
+  -c <channel>             Channel number (default: 1)
+  --country <code>         Set two-letter country code for regularity (example: US)
+  --freq-band <GHz>        Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)
+  --psk                    Use 64 hex digits pre-shared-key instead of passphrase
+  --hidden                 Make the Access Point hidden (do not broadcast the SSID)
+  --mac-filter             Enable MAC address filtering
+  --mac-filter-accept      Location of MAC address filter list (defaults to /etc/hostapd/hostapd.accept)
+  --isolate-clients        Disable communication between clients
+  --ieee80211n             Enable IEEE 802.11n (HT)
+  --ieee80211ac            Enable IEEE 802.11ac (VHT)
+  --ht_capab <HT>          HT capabilities (default: [HT40+])
+  --vht_capab <VHT>        VHT capabilities
+  --driver                 Choose your WiFi adapter driver (default: nl80211)
+  --hostapd-debug <level>  With level between 1 and 2, passes arguments -d or -dd to hostapd for debugging.
+
+DAEMONIZE OPTIONS:
+
+The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHER TASKS\" section).
+By default this script will launch hostapd in foreground.
+
+  --daemon                 Run create_ap in the background
+  --stop <id>              Send stop command to an already running create_ap. For an <id>
+                           you can put the PID of create_ap or the WiFi interface. You can
+                           get them with --list-running
+  --list-running           Show the create_ap processes that are already running
+  --list-clients <id>      List the clients connected to create_ap instance associated with <id>.
+                           For an <id> you can put the PID of create_ap or the WiFi interface.
+                           If virtual WiFi interface was created, then use that one.
+                           You can get them with --list-running
+
+NON-BRIDGING OPTIONS:
+
+The following options are meant for the hostapd task (see the \"OPTIONS FOR OTHER TASKS\" section).
+The following options are only relevant if NOT in BRIDGE mode (-m bridge).
+Specifically they only apply if '-m none'/'-n' or '-m nat' was provided.
+
+Because only in NON-BRIDGING mode, the dnsmasq instance is launched.
+
+  --redirect-to-localhost  If -n is set (-m none), redirect every web request to localhost
+                           (useful for public information networks)
+  --dhcp-dns <IP1[,IP2]>   Set DNS returned by DHCP
+  --no-dns                 Disable dnsmasq DNS server
+  --no-dnsmasq             Disable dnsmasq server completely
+  -d                       DNS server will take into account /etc/hosts
+  -e <hosts_file>          DNS server will take into account additional hosts file
+  -g <gateway>             IPv4 Gateway for the Access Point (default: 192.168.12.1)
+
+  --add-dnsmasq-conf <STR> The output of 'printf <STR>' will be appended to the dnsmasq.conf config file
+                           that is created by this script. So <STR> can contain '\\n' for newlines (see 'man printf').
+                           This happens right before dnsmasq is launched.
+                           If you use this option, we will also print the resulting dnsmasq.conf file.
+                           So providing \"\" as <STR> allows to introspect the dnsmasq.conf file that will be used!
+
+  --run-pre-dnsmasq <file> Like --prun-pre-hostapd except, that <file> will be called right before launch of dnsmasq.
+                           So <file> will also be called with the same parameters than the --run-pre-hostapd script.
+                           So <file> will also get called with --cleanup as 1st parameter on cleanup.
+
+
+::: USEFUL INFORMATION ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+  * If you're not using the --no-virt option, then you can create an AP with the same
+    interface you are getting your Internet connection.
+  * You can pass your SSID and password through pipe or through arguments (see examples).
+  * On bridge method if the <interface-with-internet> is not a bridge interface, then
+    a bridge interface is created automatically.
+
+
+:::: EXAMPLES :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+  $PROGNAME wlan0 eth0 MyAccessPoint MyPassPhrase
+  echo -e 'MyAccessPoint\nMyPassPhrase' | $PROGNAME wlan0 eth0
+  $PROGNAME wlan0 eth0 MyAccessPoint
+  echo 'MyAccessPoint' | $PROGNAME wlan0 eth0
+  $PROGNAME wlan0 wlan0 MyAccessPoint MyPassPhrase
+  $PROGNAME -n wlan0 MyAccessPoint MyPassPhrase
+  $PROGNAME -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase
+  $PROGNAME -m bridge wlan0 br0 MyAccessPoint MyPassPhrase
+  $PROGNAME --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase
+  $PROGNAME --daemon wlan0 eth0 MyAccessPoint MyPassPhrase
+  $PROGNAME --stop wlan0"|less
+  exit 0
 }
 
 # on success it echos a non-zero unused FD
@@ -243,6 +340,8 @@ is_wifi_interface() {
 
 is_bridge_interface() {
     [[ -z "$1" ]] && return 1
+    #dbg "is_bridge_interface: Chcking existance of directory '/sys/class/net/${1}/bridge' ($(ls "/sys/class/net/${1}/bridge"))..."
+    dbg "is_bridge_interface: Chcking existance of directory '/sys/class/net/${1}/bridge'..."
     [[ -d "/sys/class/net/${1}/bridge" ]]
 }
 
@@ -282,10 +381,10 @@ can_be_sta_and_ap() {
     # iwconfig does not provide this information, assume false
     [[ $USE_IWCONFIG -eq 1 ]] && return 1
     if [[ "$(get_adapter_kernel_module "$1")" == "brcmfmac" ]]; then
-        echo "WARN: brmfmac driver doesn't work properly with virtual interfaces and" >&2
-        echo "      it can cause kernel panic. For this reason we disallow virtual" >&2
-        echo "      interfaces for your adapter." >&2
-        echo "      For more info: https://github.com/oblique/create_ap/issues/203" >&2
+        warn "brmfmac driver doesn't work properly with virtual interfaces and
+it can cause kernel panic. For this reason we disallow virtual
+interfaces for your adapter.
+For more info: https://github.com/oblique/create_ap/issues/203"
         return 1
     fi
     get_adapter_info "$1" | grep -E '{.* managed.* AP.*}' > /dev/null 2>&1 && return 0
@@ -423,11 +522,12 @@ haveged_watchdog() {
         if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
             if ! which haveged > /dev/null 2>&1; then
                 if [[ $show_warn -eq 1 ]]; then
-                    echo "WARN: Low entropy detected. We recommend you to install \`haveged'"
+                    warn "Low entropy detected. We recommend you to install \`haveged'"
                     show_warn=0
                 fi
             elif ! pidof haveged > /dev/null 2>&1; then
-                echo "Low entropy detected, starting haveged"
+                echo " > Low entropy detected, starting haveged"
+                dbg "RUNNING: haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid"
                 # boost low-entropy
                 haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid
             fi
@@ -633,10 +733,11 @@ USE_PSK=0
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+CONFIG_OPTS="CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK)
+             SSID PASSPHRASE USE_PSK
+             PRE_HOSTAPD_SCRIPT PRE_DNSMASQ_SCRIPT ADD_DNSMASQ_CONF ADD_HOSTAPD_CONF"
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -656,6 +757,11 @@ IP_ADDRS=
 ROUTE_ADDRS=
 
 HAVEGED_WATCHDOG_PID=
+
+PRE_HOSTAPD_SCRIPT=""
+PRE_DNSMASQ_SCRIPT=""
+ADD_DNSMASQ_CONF="none" # to be able to recognize a specifically provided empty parameter to --add-dnsmasq-conf ! 
+ADD_HOSTAPD_CONF="none" # to be able to recognize a specifically provided empty parameter to --add-hostapd-conf ! 
 
 _cleanup() {
     local PID x
@@ -787,6 +893,16 @@ _cleanup() {
         networkmanager_rm_unmanaged_if_needed ${WIFI_IFACE} ${OLD_MACADDR}
     fi
 
+    if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
+        #NO DEBUG POSSIBLE HERE -- dbg " > RUNNING \"$PRE_HOSTAPD_SCRIPT\" --cleanup \"$CONFDIR\" \"$BRIDGE_IFACE\""
+        "$PRE_HOSTAPD_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
+    fi
+
+    if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
+        #NO DEBUG POSSIBLE HERE -- dbg " > RUNNING \"$PRE_DNSMASQ_SCRIPT\" --cleanup \"$CONFDIR\" \"$BRIDGE_IFACE\""
+        "$PRE_DNSMASQ_SCRIPT" --cleanup "$CONFDIR" "$BRIDGE_IFACE"
+    fi
+
     mutex_unlock
     cleanup_lock
 }
@@ -797,9 +913,9 @@ cleanup() {
     _cleanup > /dev/null 2>&1
     echo "done"
 }
-
+   
 die() {
-    [[ -n "$1" ]] && echo -e "\nERROR: $1\n" >&2
+    [[ -n "$1" ]] && printf "\nERROR: %s\n\n" "$1" >&2
     # send die signal to the main process
     [[ $BASHPID -ne $$ ]] && kill -USR2 $$
     # we don't need to call cleanup because it's traped on EXIT
@@ -901,7 +1017,7 @@ list_clients() {
         local client_list=$(iw dev "$wifi_iface" station dump | awk "$awk_cmd")
 
         if [[ -z "$client_list" ]]; then
-            echo "No clients connected"
+            echo " > No clients connected"
             return
         fi
 
@@ -961,8 +1077,7 @@ write_config() {
     local i=1
 
     if ! eval 'echo -n > "$STORE_CONFIG"' > /dev/null 2>&1; then
-        echo "ERROR: Unable to create config file $STORE_CONFIG" >&2
-        exit 1
+        err "Unable to create config file $STORE_CONFIG"
     fi
 
     WIFI_IFACE=$1
@@ -975,18 +1090,18 @@ write_config() {
         PASSPHRASE="$4"
     fi
 
-    for config_opt in "${CONFIG_OPTS[@]}"; do
+    for config_opt in $CONFIG_OPTS; do
         eval echo $config_opt=\$$config_opt
     done >> "$STORE_CONFIG"
 
-    echo -e "Config options written to '$STORE_CONFIG'"
+    echo " > Config options written to '$STORE_CONFIG'"
     exit 0
 }
 
 is_config_opt() {
     local elem opt="$1"
 
-    for elem in "${CONFIG_OPTS[@]}"; do
+    for elem in $CONFIG_OPTS; do
         if [[ "$elem" == "$opt" ]]; then
             return 0
         fi
@@ -1005,7 +1120,7 @@ read_config() {
         if is_config_opt "$opt_name" ; then
             eval $opt_name="\$opt_val"
         else
-            echo "WARN: Unrecognized configuration entry $opt_name" >&2
+            warn "Unrecognized configuration entry $opt_name"
         fi
     done < "$LOAD_CONFIG"
 }
@@ -1020,196 +1135,186 @@ for ((i=0; i<$#; i++)); do
             LOAD_CONFIG="${ARGS[i+1]}"
             read_config
         else
-            echo "ERROR: No config file found at given location" >&2
-            exit 1
+            err "No config file found at given location"
         fi
         break
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+[ $# -eq 0 ] && usage
+
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:","run-pre-dnsmasq:","run-pre-hostapd:","add-hostapd-conf:","add-dnsmasq-conf:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
 while :; do
-    case "$1" in
+    arg="$1"; shift
+    case "$arg" in
         -h|--help)
             usage
-            exit 0
+            ;;
+
+        --add-hostapd-conf)
+            ADD_HOSTAPD_CONF="$1"
+            shift
+            ;;
+        --add-dnsmasq-conf)
+            ADD_DNSMASQ_CONF="$1"
+            shift
+            ;;
+
+        --run-pre-dnsmasq)
+            PRE_DNSMASQ_SCRIPT="$1"
+            shift
+            [[ $PRE_DNSMASQ_SCRIPT =~ ^(/|[.]/)$ ]] || PRE_DNSMASQ_SCRIPT=./$PRE_DNSMASQ_SCRIPT;
+            [ -s "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ] \
+               || err "The parameter to --run-pre-dnsmasq must be an executable file. See --help for more info."
+            ;;
+        --run-pre-hostapd)
+            PRE_HOSTAPD_SCRIPT="$1"
+            shift
+            [[ $PRE_HOSTAPD_SCRIPT =~ ^(/|[.]/)$ ]] || PRE_HOSTAPD_SCRIPT=./$PRE_HOSTAPD_SCRIPT;
+            [ -s "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ] \
+               || err "The parameter to --run-pre-hostapd must be an executable file. See --help for more info."
             ;;
         --version)
             echo $VERSION
             exit 0
             ;;
         --hidden)
-            shift
             HIDDEN=1
             ;;
         --mac-filter)
-            shift
             MAC_FILTER=1
             ;;
         --mac-filter-accept)
-            shift
             MAC_FILTER_ACCEPT="$1"
             shift
             ;;
         --isolate-clients)
-            shift
             ISOLATE_CLIENTS=1
             ;;
         -c)
-            shift
             CHANNEL="$1"
             shift
             ;;
         -w)
-            shift
             WPA_VERSION="$1"
             [[ "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=1+2
             shift
             ;;
         -g)
-            shift
             GATEWAY="$1"
             shift
             ;;
         -d)
-            shift
             ETC_HOSTS=1
             ;;
         -e)
-            shift
             ADDN_HOSTS="$1"
             shift
             ;;
         -n)
-            shift
             SHARE_METHOD=none
             ;;
         -m)
-            shift
             SHARE_METHOD="$1"
             shift
             ;;
         --ieee80211n)
-            shift
             IEEE80211N=1
             ;;
         --ieee80211ac)
-            shift
             IEEE80211AC=1
             ;;
         --ht_capab)
-            shift
             HT_CAPAB="$1"
             shift
             ;;
         --vht_capab)
-            shift
             VHT_CAPAB="$1"
             shift
             ;;
         --driver)
-            shift
             DRIVER="$1"
             shift
             ;;
         --no-virt)
-            shift
             NO_VIRT=1
             ;;
         --fix-unmanaged)
-            shift
             FIX_UNMANAGED=1
             ;;
         --country)
-            shift
             COUNTRY="$1"
             shift
             ;;
         --freq-band)
-            shift
             FREQ_BAND="$1"
             shift
             ;;
         --mac)
-            shift
             NEW_MACADDR="$1"
             shift
             ;;
         --dhcp-dns)
-            shift
             DHCP_DNS="$1"
             shift
             ;;
         --daemon)
-            shift
             DAEMONIZE=1
             ;;
         --stop)
-            shift
             STOP_ID="$1"
             shift
             ;;
         --list)
-            shift
             LIST_RUNNING=1
-            echo -e "WARN: --list is deprecated, use --list-running instead.\n" >&2
+            warn "--list is deprecated, use --list-running instead."
             ;;
         --list-running)
-            shift
             LIST_RUNNING=1
             ;;
         --list-clients)
-            shift
             LIST_CLIENTS_ID="$1"
             shift
             ;;
         --no-haveged)
-            shift
             NO_HAVEGED=1
             ;;
         --psk)
-            shift
             USE_PSK=1
             ;;
         --no-dns)
-            shift
             NO_DNS=1
             ;;
         --no-dnsmasq)
-            shift
             NO_DNSMASQ=1
             ;;
         --redirect-to-localhost)
-            shift
             REDIRECT_TO_LOCALHOST=1
             ;;
         --hostapd-debug)
-            shift
             if [ "x$1" = "x1" ]; then
                 HOSTAPD_DEBUG_ARGS="-d"
             elif [ "x$1" = "x2" ]; then
                 HOSTAPD_DEBUG_ARGS="-dd"
             else
-                printf "Error: argument for --hostapd-debug expected 1 or 2, got %s\n" "$1"
-                exit 1
+                err "argument for --hostapd-debug expected 1 or 2, got '$1'"
             fi
             shift
             ;;
         --mkconfig)
-            shift
             STORE_CONFIG="$1"
             shift
             ;;
         --config)
             shift
-            shift
             ;;
         --)
-            shift
             break
+            ;;
+        *)  err "Unknown argument '$1'. Please call with --help for more info."
             ;;
     esac
 done
@@ -1231,8 +1336,7 @@ fi
 # Check if required number of positional args are present
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
       $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" ]]; then
-    usage >&2
-    exit 1
+    err "Required number of positional args not present.\nPlease call with --help for more info."
 fi
 
 # Set NO_DNS, if dnsmasq is disabled
@@ -1243,8 +1347,7 @@ fi
 trap "cleanup_lock" EXIT
 
 if ! init_lock; then
-    echo "ERROR: Failed to initialize lock" >&2
-    exit 1
+    err "Failed to initialize lock"
 fi
 
 # if the user press ctrl+c or we get USR1 signal
@@ -1256,7 +1359,7 @@ trap "die" SIGUSR2
 [[ -n "$STORE_CONFIG" ]] && write_config "$@"
 
 if [[ $LIST_RUNNING -eq 1 ]]; then
-    echo -e "List of running $PROGNAME instances:\n"
+    printf " > List of running $PROGNAME instances:\n\n"
     list_running
     exit 0
 fi
@@ -1267,32 +1370,30 @@ if [[ -n "$LIST_CLIENTS_ID" ]]; then
 fi
 
 if [[ $(id -u) -ne 0 ]]; then
-    echo "You must run it as root." >&2
-    exit 1
+    err "You must run it as root."
 fi
 
 if [[ -n "$STOP_ID" ]]; then
-    echo "Trying to kill $PROGNAME instance associated with $STOP_ID..."
+    echo " > ONLY trying to kill $PROGNAME instance associated with $STOP_ID..."
     send_stop "$STOP_ID"
-    exit 0
+    exit $?
 fi
 
 if [[ $FIX_UNMANAGED -eq 1 ]]; then
-    echo "Trying to fix unmanaged status in NetworkManager..."
+    echo " > ONLY trying to fix unmanaged status in NetworkManager..."
     networkmanager_fix_unmanaged
-    exit 0
+    exit $?
 fi
 
 if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
-    echo "Running as Daemon..."
+    echo " > Running as Daemon..."
     # run a detached create_ap
     RUNNING_AS_DAEMON=1 setsid "$0" "${ARGS[@]}" &
     exit 0
 fi
 
 if [[ $FREQ_BAND != 2.4 && $FREQ_BAND != 5 ]]; then
-    echo "ERROR: Invalid frequency band" >&2
-    exit 1
+    err "Invalid frequency band"
 fi
 
 if [[ $CHANNEL == default ]]; then
@@ -1304,28 +1405,26 @@ if [[ $CHANNEL == default ]]; then
 fi
 
 if [[ $FREQ_BAND != 5 && $CHANNEL -gt 14 ]]; then
-    echo "Channel number is greater than 14, assuming 5GHz frequency band"
+    echo "> Channel number is greater than 14, assuming 5GHz frequency band"
     FREQ_BAND=5
 fi
 
 WIFI_IFACE=$1
 
 if ! is_wifi_interface ${WIFI_IFACE}; then
-    echo "ERROR: '${WIFI_IFACE}' is not a WiFi interface" >&2
+    err "'${WIFI_IFACE}' is not a WiFi interface"
     exit 1
 fi
 
 if ! can_be_ap ${WIFI_IFACE}; then
-    echo "ERROR: Your adapter does not support AP (master) mode" >&2
-    exit 1
+    err "Your adapter does not support AP (master) mode"
 fi
 
 if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     if is_wifi_connected ${WIFI_IFACE}; then
-        echo "ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time" >&2
-        exit 1
+        err "Your adapter can not be a station (i.e. be connected) and an AP at the same time"
     elif [[ $NO_VIRT -eq 0 ]]; then
-        echo "WARN: Your adapter does not fully support AP virtual interface, enabling --no-virt" >&2
+        warn "Your adapter does not fully support AP virtual interface, enabling --no-virt"
         NO_VIRT=1
     fi
 fi
@@ -1333,42 +1432,35 @@ fi
 HOSTAPD=$(which hostapd)
 
 if [[ ! -x "$HOSTAPD" ]]; then
-    echo "ERROR: hostapd not found." >&2
-    exit 1
+    err "hostapd not found."
 fi
 
 if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^(8192[cd][ue]|8723a[sue])$ ]]; then
     if ! strings "$HOSTAPD" | grep -m1 rtl871xdrv > /dev/null 2>&1; then
-        echo "ERROR: You need to patch your hostapd with rtl871xdrv patches." >&2
-        exit 1
+        err "You need to patch your hostapd with rtl871xdrv patches."
     fi
 
     if [[ $DRIVER != "rtl871xdrv" ]]; then
-        echo "WARN: Your adapter needs rtl871xdrv, enabling --driver=rtl871xdrv" >&2
+        warn "Your adapter needs rtl871xdrv, enabling --driver=rtl871xdrv"
         DRIVER=rtl871xdrv
     fi
 fi
 
 if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
-    echo "ERROR: Wrong Internet sharing method" >&2
-    echo
-    usage >&2
-    exit 1
+    err "Wrong Internet sharing method. Call with --help for more info."
 fi
 
 if [[ -n "$NEW_MACADDR" ]]; then
     if ! is_macaddr "$NEW_MACADDR"; then
-        echo "ERROR: '${NEW_MACADDR}' is not a valid MAC address" >&2
-        exit 1
+        err "'${NEW_MACADDR}' is not a valid MAC address"
     fi
 
     if ! is_unicast_macaddr "$NEW_MACADDR"; then
-        echo "ERROR: The first byte of MAC address (${NEW_MACADDR}) must be even" >&2
-        exit 1
+        err "The first byte of MAC address (${NEW_MACADDR}) must be even"
     fi
 
     if [[ $(get_all_macaddrs | grep -c ${NEW_MACADDR}) -ne 0 ]]; then
-        echo "WARN: MAC address '${NEW_MACADDR}' already exists. Because of this, you may encounter some problems" >&2
+        warn "MAC address '${NEW_MACADDR}' already exists. Because of this, you may encounter some problems"
     fi
 fi
 
@@ -1381,16 +1473,14 @@ fi
 if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 3 && $# -ne 4 ]]; then
-            usage >&2
-            exit 1
+            err "Wrong number of arguments. Call with --help for more info."
         fi
         INTERNET_IFACE="$2"
         SSID="$3"
         PASSPHRASE="$4"
     else
         if [[ $# -ne 2 && $# -ne 3 ]]; then
-            usage >&2
-            exit 1
+            err "Wrong number of arguments. Call with --help for more info."
         fi
         SSID="$2"
         PASSPHRASE="$3"
@@ -1398,8 +1488,7 @@ if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
 else
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 2 ]]; then
-            usage >&2
-            exit 1
+            err "Wrong number of arguments. Call with --help for more info."
         fi
         INTERNET_IFACE="$2"
     fi
@@ -1407,32 +1496,31 @@ else
         while :; do
             read -p "SSID: " SSID
             if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
-                echo "ERROR: Invalid SSID length ${#SSID} (expected 1..32)" >&2
+                printf "\nERROR: Invalid SSID length ${#SSID} (expected 1..32)\n" >&2
                 continue
             fi
             break
         done
         while :; do
             if [[ $USE_PSK -eq 0 ]]; then
-                read -p "Passphrase: " -s PASSPHRASE
+                read -p " > Passphrase: " -s PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-                    echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
+                    printf "\nERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)\n" >&2
                     continue
                 fi
-                read -p "Retype passphrase: " -s PASSPHRASE2
+                read -p " > Retype passphrase: " -s PASSPHRASE2
                 echo
                 if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
-                    echo "Passphrases do not match."
+                    printf "\nERROR: Passphrases do not match.\n" >&2
                 else
                     break
                 fi
             else
-                read -p "PSK: " PASSPHRASE
+                read -p " > PSK: " PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
-                    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
-                    continue
+                    err "Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)"
                 fi
             fi
         done
@@ -1443,44 +1531,38 @@ else
 fi
 
 if [[ "$SHARE_METHOD" != "none" ]] && ! is_interface $INTERNET_IFACE; then
-    echo "ERROR: '${INTERNET_IFACE}' is not an interface" >&2
-    exit 1
+    err "'${INTERNET_IFACE}' is not an interface"
 fi
 
 if [[ ${#SSID} -lt 1 || ${#SSID} -gt 32 ]]; then
-    echo "ERROR: Invalid SSID length ${#SSID} (expected 1..32)" >&2
-    exit 1
+    err "Invalid SSID length ${#SSID} (expected 1..32)"
 fi
 
 if [[ $USE_PSK -eq 0 ]]; then
     if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
-        echo "ERROR: Invalid passphrase length ${#PASSPHRASE} (expected 8..63)" >&2
-        exit 1
+        err "Invalid passphrase length ${#PASSPHRASE} (expected 8..63)"
     fi
 elif [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
-    echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
-    exit 1
+    err "Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)"
 fi
 
 if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^rtl[0-9].*$ ]]; then
     if [[ -n "$PASSPHRASE" ]]; then
-        echo "WARN: Realtek drivers usually have problems with WPA1, enabling -w 2" >&2
+        warn "Realtek drivers usually have problems with WPA1, enabling -w 2"
         WPA_VERSION=2
     fi
-    echo "WARN: If AP doesn't work, please read: howto/realtek.md" >&2
+    warn "If AP doesn't work, please read: howto/realtek.md"
 fi
 
 if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
-    echo -n "ERROR: You can not share your connection from the same" >&2
-    echo " interface if you are using --no-virt option." >&2
-    exit 1
+    err "You can not share your connection from the same interface if you are using --no-virt option."
 fi
 
 mutex_lock
 trap "cleanup" EXIT
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
-echo "Config dir: $CONFDIR"
-echo "PID: $$"
+echo " > Config dir: $CONFDIR"
+echo " > PID: $$"
 echo $$ > $CONFDIR/pid
 
 # to make --list-running work from any user, we must give read
@@ -1520,7 +1602,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
     # in NetworkManager 0.9.9 and above we can set the interface as unmanaged without
     # the need of MAC address, so we set it before we create the virtual interface.
     if networkmanager_is_running && [[ $NM_OLDER_VERSION -eq 0 ]]; then
-        echo -n "Network Manager found, set ${VWIFI_IFACE} as unmanaged device... "
+        printf " > Network Manager found, set ${VWIFI_IFACE} as unmanaged device... "
         networkmanager_add_unmanaged ${VWIFI_IFACE}
         # do not call networkmanager_wait_until_unmanaged because interface does not
         # exist yet
@@ -1530,7 +1612,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
     if is_wifi_connected ${WIFI_IFACE}; then
         WIFI_IFACE_FREQ=$(iw dev ${WIFI_IFACE} link | grep -i freq | awk '{print $2}')
         WIFI_IFACE_CHANNEL=$(ieee80211_frequency_to_channel ${WIFI_IFACE_FREQ})
-        echo -n "${WIFI_IFACE} is already associated with channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
+        printf " > ${WIFI_IFACE} is already associated with channel ${WIFI_IFACE_CHANNEL} (${WIFI_IFACE_FREQ} MHz)"
         if is_5ghz_frequency $WIFI_IFACE_FREQ; then
             FREQ_BAND=5
         else
@@ -1546,7 +1628,7 @@ if [[ $NO_VIRT -eq 0 ]]; then
 
     VIRTDIEMSG="Maybe your WiFi adapter does not fully support virtual interfaces.
        Try again with --no-virt."
-    echo -n "Creating a virtual WiFi interface... "
+    printf " > Creating a virtual WiFi interface... "
 
     if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
         # now we can call networkmanager_wait_until_unmanaged
@@ -1577,7 +1659,7 @@ fi
 can_transmit_to_channel ${WIFI_IFACE} ${CHANNEL} || die "Your adapter can not transmit to channel ${CHANNEL}, frequency band ${FREQ_BAND}GHz."
 
 if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; then
-    echo -n "Network Manager found, set ${WIFI_IFACE} as unmanaged device... "
+    printf " > Network Manager found, set ${WIFI_IFACE} as unmanaged device... "
     networkmanager_add_unmanaged ${WIFI_IFACE}
 
     if networkmanager_is_running; then
@@ -1587,11 +1669,11 @@ if networkmanager_exists && ! networkmanager_iface_is_unmanaged ${WIFI_IFACE}; t
     echo "DONE"
 fi
 
-[[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
+[[ $HIDDEN -eq 1 ]] && echo " > Access Point's SSID is hidden!"
 
-[[ $MAC_FILTER -eq 1 ]] && echo "MAC address filtering is enabled!"
+[[ $MAC_FILTER -eq 1 ]] && echo " > MAC address filtering is enabled!"
 
-[[ $ISOLATE_CLIENTS -eq 1 ]] && echo "Access Point's clients will be isolated!"
+[[ $ISOLATE_CLIENTS -eq 1 ]] && echo " > Access Point's clients will be isolated!"
 
 # hostapd config
 cat << EOF > $CONFDIR/hostapd.conf
@@ -1682,6 +1764,7 @@ dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option-force=option:router,${GATEWAY}
 dhcp-option-force=option:dns-server,${DHCP_DNS}
 EOF
+
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
@@ -1712,7 +1795,7 @@ fi
 
 # enable Internet sharing
 if [[ "$SHARE_METHOD" != "none" ]]; then
-    echo "Sharing Internet using method: $SHARE_METHOD"
+    echo " > Sharing Internet using method: $SHARE_METHOD"
     if [[ "$SHARE_METHOD" == "nat" ]]; then
         iptables -w -t nat -I POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE || die
         iptables -w -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
@@ -1738,7 +1821,8 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # we need the above because BRIDGE_IFACE is the master interface from now on
         # and it must know where is connected, otherwise connection is lost.
         if ! is_bridge_interface $INTERNET_IFACE; then
-            echo -n "Create a bridge interface... "
+            printf " > Creating a bridge interface... "
+            dbg
             OLD_IFS="$IFS"
             IFS=$'\n'
 
@@ -1753,16 +1837,22 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
             fi
 
             # create bridge interface
+            dbg "ip link add name $BRIDGE_IFACE type bridge || die"
             ip link add name $BRIDGE_IFACE type bridge || die
+            dbg "ip link set dev $BRIDGE_IFACE up || die"
             ip link set dev $BRIDGE_IFACE up || die
             # set 0ms forward delay
             echo 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
 
             # attach internet interface to bridge interface
+            dbg "ip link set dev $INTERNET_IFACE promisc on || die"
             ip link set dev $INTERNET_IFACE promisc on || die
+            dbg "ip link set dev $INTERNET_IFACE up || die"
             ip link set dev $INTERNET_IFACE up || die
+            dbg "ip link set dev $INTERNET_IFACE master $BRIDGE_IFACE || die"
             ip link set dev $INTERNET_IFACE master $BRIDGE_IFACE || die
 
+            dbg "ip addr flush $INTERNET_IFACE"
             ip addr flush $INTERNET_IFACE
             for x in "${IP_ADDRS[@]}"; do
                 x="${x/inet/}"
@@ -1770,22 +1860,27 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
                 x="${x/dynamic/}"
                 x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
                 x="${x/${INTERNET_IFACE}/}"
+                dbg "ip addr add $x dev $BRIDGE_IFACE || die"
                 ip addr add $x dev $BRIDGE_IFACE || die
             done
 
             # remove any existing entries that were added from 'ip addr add'
+            dbg "ip route flush dev $INTERNET_IFACE"
             ip route flush dev $INTERNET_IFACE
+            dbg "ip route flush dev $BRIDGE_IFACE"
             ip route flush dev $BRIDGE_IFACE
 
             # we must first add the entries that specify the subnets and then the
             # gateway entry, otherwise 'ip addr add' will return an error
             for x in "${ROUTE_ADDRS[@]}"; do
                 [[ "$x" == default* ]] && continue
+                dbg "ip route add $x dev $BRIDGE_IFACE || die"
                 ip route add $x dev $BRIDGE_IFACE || die
             done
 
             for x in "${ROUTE_ADDRS[@]}"; do
                 [[ "$x" != default* ]] && continue
+                dbg "ip route add $x dev $BRIDGE_IFACE || die"
                 ip route add $x dev $BRIDGE_IFACE || die
             done
 
@@ -1793,10 +1888,10 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         fi
     fi
 else
-    echo "No Internet sharing"
+    echo " > No Internet sharing"
 fi
 
-# start dhcp + dns (optional)
+# start dnsmasq (to supply dhcp + dns (optional))
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
@@ -1819,27 +1914,63 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
           complain dnsmasq
       fi
 
+      if [ "$ADD_DNSMASQ_CONF" != "none" ]; then
+          printf "$ADD_DNSMASQ_CONF" >>"$CONFDIR/dnsmasq.conf"
+          echo " > Using this dnsmasq.conf: (temporarily stored in above Config dir)
+$(cat "$CONFDIR/dnsmasq.conf"|sed -e 's/^/   | /')"
+
+      else
+          dbg "$CONFDIR/dnsmasq.conf:
+$(cat "$CONFDIR/dnsmasq.conf")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      fi
+
+      if [ -n "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ]; then
+          echo " > Running \"$PRE_DNSMASQ_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+          "$PRE_DNSMASQ_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE"|sed -e 's/^/   | /' || err "PRE_DNSMASQ_SCRIPT '$PRE_DNSMASQ_SCRIPT' failed [$?]."
+      fi
+
+      dbg "RUNNING: dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT"
       umask 0033
       dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
       umask $SCRIPT_UMASK
     fi
 fi
 
-# start access point
-echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
-
 if [[ $NO_HAVEGED -eq 0 ]]; then
     haveged_watchdog &
     HAVEGED_WATCHDOG_PID=$!
 fi
 
+if [ "$ADD_HOSTAPD_CONF" != "none" ]; then
+    printf "$ADD_HOSTAPD_CONF" >>"$CONFDIR/hostapd.conf"
+    echo " > Using this hostapd.conf: (temporarily stored in above Config dir)
+$(cat "$CONFDIR/hostapd.conf"|sed -e 's/^/   | /')"
+
+else
+    dbg "$CONFDIR/hostapd.conf:
+$(cat "$CONFDIR/hostapd.conf")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+fi
+
+if [ -n "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ]; then
+    echo " > Running \"$PRE_HOSTAPD_SCRIPT\" \"$CONFDIR\" \"$BRIDGE_IFACE\""
+    "$PRE_HOSTAPD_SCRIPT" "$CONFDIR" "$BRIDGE_IFACE"|sed -e 's/^/   | /' || err "PRE_HOSTAPD_SCRIPT '$PRE_HOSTAPD_SCRIPT' failed [$?]."
+fi
+
+# start access point
+printf " > Starting hostapd -- command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl\n\n"
+
 # start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
+dbg "RUNNING: stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &"
 stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
+
 HOSTAPD_PID=$!
+dbg "SAVING HOSTAPD_PID '$HOSTAPD_PID' to '$CONFDIR/hostapd.pid'"
 echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
 
 if ! wait $HOSTAPD_PID; then
-    echo -e "\nError: Failed to run hostapd, maybe a program is interfering." >&2
+    printf "\nERROR: Failed to run hostapd, maybe a program is interfering.\n" >&2
     if networkmanager_is_running; then
         echo "If an error like 'n80211: Could not configure driver mode' was thrown" >&2
         echo "try running the following before starting create_ap:" >&2
