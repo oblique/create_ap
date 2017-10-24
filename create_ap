@@ -1164,12 +1164,14 @@ while :; do
         --run-pre-dnsmasq)
             PRE_DNSMASQ_SCRIPT="$1"
             shift
+            [[ $PRE_DNSMASQ_SCRIPT =~ ^(/|[.]/)$ ]] || PRE_DNSMASQ_SCRIPT=./$PRE_DNSMASQ_SCRIPT;
             [ -s "$PRE_DNSMASQ_SCRIPT" -a -x "$PRE_DNSMASQ_SCRIPT" ] \
                || err "The parameter to --run-pre-dnsmasq must be an executable file. See --help for more info."
             ;;
         --run-pre-hostapd)
             PRE_HOSTAPD_SCRIPT="$1"
             shift
+            [[ $PRE_HOSTAPD_SCRIPT =~ ^(/|[.]/)$ ]] || PRE_HOSTAPD_SCRIPT=./$PRE_HOSTAPD_SCRIPT;
             [ -s "$PRE_HOSTAPD_SCRIPT" -a -x "$PRE_HOSTAPD_SCRIPT" ] \
                || err "The parameter to --run-pre-hostapd must be an executable file. See --help for more info."
             ;;
