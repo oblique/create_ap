@@ -1833,8 +1833,12 @@ if [[ $NO_HAVEGED -eq 0 ]]; then
     HAVEGED_WATCHDOG_PID=$!
 fi
 
-# start hostapd (use stdbuf for no delayed output in programs that redirect stdout)
-stdbuf -oL $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
+# start hostapd (use stdbuf when available for no delayed output in programs that redirect stdout)
+STDBUF_PATH=`which stdbuf`
+if [ $? -eq 0 ]; then
+    STDBUF_PATH=$STDBUF_PATH" -oL"
+fi
+$STDBUF_PATH $HOSTAPD $HOSTAPD_DEBUG_ARGS $CONFDIR/hostapd.conf &
 HOSTAPD_PID=$!
 echo $HOSTAPD_PID > $CONFDIR/hostapd.pid
 
