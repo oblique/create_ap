@@ -612,6 +612,7 @@ ADDN_HOSTS=
 DHCP_DNS=gateway
 NO_DNS=0
 NO_DNSMASQ=0
+DNS_PORT=
 HIDDEN=0
 MAC_FILTER=0
 MAC_FILTER_ACCEPT=/etc/hostapd/hostapd.accept
@@ -760,12 +761,12 @@ _cleanup() {
 
     if [[ "$SHARE_METHOD" != "bridge" ]]; then
         if [[ $NO_DNS -eq 0 ]]; then
-            iptables -w -D INPUT -p tcp -m tcp --dport 5353 -j ACCEPT
-            iptables -w -D INPUT -p udp -m udp --dport 5353 -j ACCEPT
+            iptables -w -D INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT
+            iptables -w -D INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
-                -p tcp -m tcp --dport 53 -j REDIRECT --to-ports 5353
+                -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
-                -p udp -m udp --dport 53 -j REDIRECT --to-ports 5353
+                -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT
         fi
         iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
     fi
