@@ -60,6 +60,7 @@ usage() {
     echo "                          close create_ap, then use this option to switch your interface"
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
+    echo "  --dhcp-search-domain <IP1[,IP2]>  Set search domain returned by DHCP"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
     echo "  --daemon                Run create_ap in the background"
     echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
@@ -609,6 +610,7 @@ GATEWAY=192.168.12.1
 WPA_VERSION=1+2
 ETC_HOSTS=0
 ADDN_HOSTS=
+DHCP_SEARCH_DOMAIN=
 DHCP_DNS=gateway
 NO_DNS=0
 NO_DNSMASQ=0
@@ -634,7 +636,7 @@ USE_PSK=0
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_SEARCH_DOMAIN DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
@@ -1028,7 +1030,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-search-domain:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1137,6 +1139,11 @@ while :; do
         --mac)
             shift
             NEW_MACADDR="$1"
+            shift
+            ;;
+        --dhcp-search-domain)
+            shift
+            DHCP_SEARCH_DOMAIN="$1"
             shift
             ;;
         --dhcp-dns)
@@ -1676,13 +1683,25 @@ elif [[ $NO_DNSMASQ -eq 0 ]]; then
     if [[ "$DHCP_DNS" == "gateway" ]]; then
         DHCP_DNS="$GATEWAY"
     fi
-    cat << EOF > $CONFDIR/dnsmasq.conf
+    if [[ "$DHCP_SEARCH_DOMAIN" == "" ]]; then
+        cat << EOF > $CONFDIR/dnsmasq.conf
 listen-address=${GATEWAY}
 ${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option-force=option:router,${GATEWAY}
 dhcp-option-force=option:dns-server,${DHCP_DNS}
 EOF
+    else
+        cat << EOF > $CONFDIR/dnsmasq.conf
+listen-address=${GATEWAY}
+${DNSMASQ_BIND}
+dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
+dhcp-option-force=option:router,${GATEWAY}
+dhcp-option-force=option:domain-name,${DHCP_SEARCH_DOMAIN}
+dhcp-option-force=option:dns-server,${DHCP_DNS}
+EOF
+    fi
+    
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
