@@ -1821,7 +1821,7 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
       fi
 
       umask 0033
-      dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
+      dnsmasq -d -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die &
       umask $SCRIPT_UMASK
     fi
 fi
