@@ -761,14 +761,14 @@ _cleanup() {
 
     if [[ "$SHARE_METHOD" != "bridge" ]]; then
         if [[ $NO_DNS -eq 0 ]]; then
-            iptables -w -D INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT
-            iptables -w -D INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT
+            iptables -w -D INPUT -i ${WIFI_IFACE} -p tcp -m tcp --dport $DNS_PORT -j ACCEPT
+            iptables -w -D INPUT -i ${WIFI_IFACE} -p udp -m udp --dport $DNS_PORT -j ACCEPT
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
                 -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
                 -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT
         fi
-        iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+        iptables -w -D INPUT -i ${WIFI_IFACE} -p udp -m udp --dport 67 -j ACCEPT
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1801,8 +1801,8 @@ fi
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
-        iptables -w -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
-        iptables -w -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
+        iptables -w -I INPUT -i ${WIFI_IFACE} -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
+        iptables -w -I INPUT -i ${WIFI_IFACE} -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
         iptables -w -t nat -I PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
             -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT || die
         iptables -w -t nat -I PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
@@ -1812,7 +1812,7 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     fi
 
     if [[ $NO_DNSMASQ -eq 0 ]]; then
-      iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+      iptables -w -I INPUT -i ${WIFI_IFACE} -p udp -m udp --dport 67 -j ACCEPT || die
 
       if which complain > /dev/null 2>&1; then
           # openSUSE's apparmor does not allow dnsmasq to read files.
