@@ -16,9 +16,18 @@ set -e
 # for details, see https://www.debian.org/doc/debian-policy/ or
 # the debian-policy package
 
+PREFIX=/usr
+MANDIR=$(PREFIX)/share/man
+BINDIR=$(PREFIX)/bin
 
 case "$1" in
     remove|upgrade|deconfigure)
+        rm -f $(DESTDIR)$(BINDIR)/create_ap
+        rm -f $(DESTDIR)/etc/create_ap.conf
+        [ ! -f /lib/systemd/system/create_ap.service ] || rm -f $(DESTDIR)$(PREFIX)/lib/systemd/system/create_ap.service
+        rm -f $(DESTDIR)$(PREFIX)/share/bash-completion/completions/create_ap
+        rm -f $(DESTDIR)$(PREFIX)/share/doc/create_ap/README.md
+
     ;;
 
     failed-upgrade)

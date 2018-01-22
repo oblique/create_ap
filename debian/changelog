@@ -1,3 +1,10 @@
+createap (0.4.6-1ubuntu1) UNRELEASED; urgency=medium
+
+  * I have found that the "NO_HAVEGED=1" option would cause something unexpected .
+  * I`m doing more test to make it easier to build and install it .
+
+ -- caozuohua <caozuohua@qq.com>  Mon, 22 Jan 2018 16:02:33 +0800
+
 createap (0.4.6-1) unstable; urgency=medium
 
   * Initial release 

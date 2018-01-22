@@ -1,6 +1,15 @@
 createap for Debian
 ------------------
+Any affort to make this program better is appreciated :)
 
-<possible notes regarding this package - if none, delete this file>
+I do this project just because I have studided Debian package system for some time, as well as I was troubled a lot by STUPID network-manager on my UKylin1604 os. And I have being using this create_ap script for a few days, and I like it very much for its stability. 
 
- -- root <root@unknown>  Fri, 29 Dec 2017 09:57:54 +0800
+To build this debian package, run following comand in createap-xxx/:
+	debuild //you need to install devscripts first.
+or:
+	dpkg-buildpackage -b
+
+To install the .deb package into your Debian/Ubuntu/UKylin os:
+	dpkg -i createap-xxx.deb
+
+ -- caozuohua <caozuohua@qq.com>  Fri, 29 Dec 2017 09:57:54 +0800
