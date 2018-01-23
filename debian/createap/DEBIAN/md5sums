@@ -1,0 +1,7 @@
+b9b92e755188ac90c61fb62826c11c7e  usr/bin/create_ap
+142ed8b13fe26f2ab7e787f843ac064c  usr/lib/systemd/system/create_ap.service
+03132054c20ebb228f00c31602537896  usr/share/bash-completion/completions/create_ap
+9e0671aa9868f2b6effa571bdf487091  usr/share/doc/create_ap/README.md
+7658fd33560f0b80920b3fc07bac3039  usr/share/doc/createap/README.Debian
+c56d991a48c6b79351be3d1e239b11af  usr/share/doc/createap/changelog.Debian.gz
+a47df3cfb2f2d0ead1b7a778f6d43846  usr/share/doc/createap/copyright

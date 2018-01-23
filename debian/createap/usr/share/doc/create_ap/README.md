@@ -82,8 +82,6 @@ Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basi
 ### Start on boot:
     systemctl enable create_ap
 
-### About Debian package
-    Please refer to debian/README.Debian
 
 ## License
 FreeBSD

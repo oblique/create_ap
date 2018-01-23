@@ -1,0 +1,168 @@
+#
+# Bash Completion routine for create_ap
+#
+
+_use_filedir() {
+    if [[ $(type -t _filedir) == "function" ]]; then
+        _filedir
+        return 0
+    fi
+    return 1
+}
+
+_create_ap() {
+    local awk_cmd='
+        ($1 ~ /^-/) {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /,$/) {
+                    print substr ($i, 0, length ($i)-1)
+                }
+                else {
+                    print $i
+                    break
+                }
+            }
+        }
+    '
+
+    local cur prev opts
+    COMPREPLY=()
+    cur="$2"
+    prev="$3"
+    opts=$("$1" --help | awk "$awk_cmd")
+
+    case "$prev" in
+        -h|--help)
+            # No Options
+            ;;
+        --version)
+            # No Options
+            ;;
+        -c)
+            # Refer http://en.wikipedia.org/wiki/List_of_WLAN_channels
+            opts=$(
+                iw list | grep ' MHz \[[[:digit:]]\+\] ' |
+                grep -v 'no IR\|disabled' |
+                sed 's/.*\[\(.*\)\].*/\1/' | sort -n | uniq
+            )
+            ;;
+        -w)
+            opts="1 2 1+2"
+            ;;
+        -n)
+            # No Options
+            ;;
+        -m)
+            opts="nat bridge none"
+            ;;
+        --psk)
+            # No Options
+            ;;
+        --hidden)
+            # No Options
+            ;;
+        --mac-filter)
+            # No Options
+            ;;
+        --mac-filter-accept)
+            # No Options
+            ;;
+        --ieee80211n)
+            # No Options
+            ;;
+        --ht_capab)
+            # Refer http://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf
+            opts='
+                [LDPC] [HT40-] [HT40+] [SMPS-STATIC] [SMPS-DYNAMIC]
+                [GF] [SHORT-GI-20] [SHORT-GI-40] [TX-STBC]
+                [RX-STBC1] [RX-STBC12] [RX-STBC123] [DELAYED-BA]
+                [MAX-AMSDU-7935] [DSSS_CCK-40] [40-INTOLERANT]
+                [LSIG-TXOP-PROT]
+            '
+            ;;
+        --country)
+            local reg_file=/usr/lib/crda/regulatory.bin
+            if command -v regdbdump > /dev/null && [[ -f "$reg_file" ]]; then
+                local country_awk_cmd='
+                    ($1 ~ /^country/) {
+                        print substr ($2, 0, length ($2)-1)
+                    }
+                '
+                opts=$(regdbdump "$reg_file" 2>/dev/null | awk "$country_awk_cmd")
+            else
+                opts='
+                    AD AE AF AI AL AM AN AR AS AT AU AW AZ BA BB BD BE
+                    BF BG BH BL BM BN BO BR BS BT BY BZ CA CF CH CI CL
+                    CN CO CR CX CY CZ DE DK DM DO DZ EC EE EG ES ET FI
+                    FM FR GB GD GE GF GH GL GP GR GT GU GY HK HN HR HT
+                    HU ID IE IL IN IR IS IT JM JO JP KE KH KN KP KR KW
+                    KY KZ LB LC LI LK LS LT LU LV MA MC MD ME MF MH MK
+                    MN MO MP MQ MR MT MU MW MX MY NG NI NL NO NP NZ OM
+                    PA PE PF PG PH PK PL PM PR PT PW PY QA RE RO RS RU
+                    RW SA SE SG SI SK SN SR SV SY TC TD TG TH TN TR TT
+                    TW TZ UA UG US UY UZ VC VE VI VN VU WF WS YE YT ZA
+                    ZW 00
+                '
+            fi
+            ;;
+        --freq-band)
+            opts="2.4 5"
+            ;;
+        --driver)
+            # Refer http://w1.fi/cgit/hostap/tree/src/drivers
+            # Not going to implement
+            ;;
+        --no-virt)
+            # No Options
+            ;;
+        --no-haveged)
+            # No Options
+            ;;
+        --fix-unmanaged)
+            # No Options
+            ;;
+        --mac)
+            # Not going to implement
+            ;;
+        --daemon)
+            # No Options
+            ;;
+        --stop)
+            local stop_awk_cmd='$1 ~ /^[0-9]+$/'
+            opts=$("$1" --list-running | awk "$stop_awk_cmd")
+            ;;
+        --list-running)
+            # No Options
+            ;;
+        --list-clients)
+            local clients_awk_cmd='$1 ~ /^[0-9]+$/'
+            opts=$("$1" --list-running | awk "$clients_awk_cmd")
+            ;;
+        --no-dns)
+            # No Options
+            ;;
+        --dhcp-dns)
+            # Not going to implement
+            ;;
+        --mkconfig)
+            _use_filedir && return 0
+            ;;
+        --config)
+            _use_filedir && return 0
+            ;;
+        -g)
+            # Not going to implement
+            ;;
+        -d)
+            # No Options
+            ;;
+        *)
+            ;;
+    esac
+
+    COMPREPLY=( $(compgen -W "$opts" -- $cur) )
+    return 0
+}
+complete -F _create_ap create_ap
+
+# vim: set ft=sh:

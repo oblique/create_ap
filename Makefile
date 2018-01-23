@@ -1,3 +1,4 @@
+#!/usr/bin/make
 PREFIX=/usr
 MANDIR=$(PREFIX)/share/man
 BINDIR=$(PREFIX)/bin
