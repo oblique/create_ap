@@ -76,6 +76,10 @@
 
 ## Systemd service
 Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service
+
+### Setup the service
+    vim /etc/create_ap.conf
+
 ### Start service immediately:
     systemctl start create_ap
 
