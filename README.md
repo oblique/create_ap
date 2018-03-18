@@ -1,7 +1,8 @@
 ## FOR HELP TYPE create_ap --help
 This was not in the original README.md or repository. I figured this out on my own.
 ## BEFORE USING THE PERSISTENT SERVICE PLEASE READ
-# create_ap is going to read from the config at /etc/create_ap.conf no the one in the directory from the build.
+# 
+create_ap is going to read from the config at /etc/create_ap.conf not the one in the directory from the build.
 #
 ## Do not forget to edit /etc/create_ap.conf before reboot.
 ## Features
