@@ -1,5 +1,9 @@
 ## FOR HELP TYPE create_ap --help
 This was not in the original README.md or repository. I figured this out on my own.
+## BEFORE USING THE PERSISTENT SERVICE PLEASE READ
+# create_ap is going to read from the config at /etc/create_ap.conf no the one in the directory from the build.
+#
+## Do not forget to edit /etc/create_ap.conf before reboot.
 ## Features
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
