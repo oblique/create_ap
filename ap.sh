@@ -7,5 +7,7 @@ echo "What Password Should It Have?:"
 read key
 echo "What Channel?: (To Avoid Congestion, Use A Channel Not Popular In The Area, ie: 3,5,7,9)"
 read channel
+echo "What Interface Do We Use?:"
+read wifidev
 # Launch Time
 sudo create_ap -w 2 -c $channel $wifdev eth0 $ssid $key
