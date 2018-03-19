@@ -103,6 +103,17 @@ usage() {
     echo "  "$PROGNAME" --stop wlan0"
 }
 
+# Busybox polyfills
+if cp --help 2>&1 | grep -q -- --no-clobber; then
+    cp_n() {
+        cp -n "$@"
+    }
+else
+    cp_n() {
+        yes n | cp -i "$@"
+    }
+fi
+
 # on success it echos a non-zero unused FD
 # on error it echos 0
 get_avail_fd() {
@@ -1514,12 +1525,12 @@ mkdir -p $COMMON_CONFDIR
 
 if [[ "$SHARE_METHOD" == "nat" ]]; then
     echo $INTERNET_IFACE > $CONFDIR/nat_internet_iface
-    cp -n /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding \
+    cp_n /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding \
        $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding
 fi
-cp -n /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
+cp_n /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
 if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
-    cp -n /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
+    cp_n /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
 fi
 mutex_unlock
 
