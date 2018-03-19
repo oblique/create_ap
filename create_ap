@@ -1314,7 +1314,11 @@ if [[ $FIX_UNMANAGED -eq 1 ]]; then
 fi
 
 if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
-    echo "Running as Daemon..."
+    # Assume we're running underneath a service manager if PIDFILE is set
+    # and don't clobber it's output with a useless message
+    if [ -z "$DAEMON_PIDFILE" ]; then
+        echo "Running as Daemon..."
+    fi
     # run a detached create_ap
     RUNNING_AS_DAEMON=1 setsid "$0" "${ARGS[@]}" >>$DAEMON_LOGFILE 2>&1 &
     exit 0
