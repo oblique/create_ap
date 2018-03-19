@@ -1,0 +1,11 @@
+#!/sbin/openrc-run
+
+name=$RC_SVCNAME
+
+cfgfile=/etc/$RC_SVCNAME.conf
+pidfile=/run/$RC_SVCNAME.pid
+
+command=/usr/bin/create_ap
+command_args="--config $cfgfile"
+command_args_background="--daemon --pidfile $pidfile"
+stopsig=USR1
