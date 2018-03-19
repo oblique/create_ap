@@ -1788,7 +1788,7 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
             ip link add name $BRIDGE_IFACE type bridge || die
             ip link set dev $BRIDGE_IFACE up || die
             # set 0ms forward delay
-            echo 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
+            echo -n 0 > /sys/class/net/$BRIDGE_IFACE/bridge/forward_delay
 
             # attach internet interface to bridge interface
             ip link set dev $INTERNET_IFACE promisc on || die
