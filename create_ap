@@ -62,6 +62,8 @@ usage() {
     echo "  --mac <MAC>             Set MAC address"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
     echo "  --daemon                Run create_ap in the background"
+    echo "  --pidfile <pidfile>     Save daemon PID to file"
+    echo "  --logfile <logfile>     Save daemon messages to file"
     echo "  --stop <id>             Send stop command to an already running create_ap. For an <id>"
     echo "                          you can put the PID of create_ap or the WiFi interface. You can"
     echo "                          get them with --list-running"
@@ -628,6 +630,8 @@ COUNTRY=
 FREQ_BAND=2.4
 NEW_MACADDR=
 DAEMONIZE=0
+DAEMON_PIDFILE=
+DAEMON_LOGFILE=/dev/null
 NO_HAVEGED=0
 USE_PSK=0
 
@@ -636,7 +640,7 @@ REDIRECT_TO_LOCALHOST=0
 
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
-             NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
+             NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK)
 
 FIX_UNMANAGED=0
@@ -790,6 +794,10 @@ _cleanup() {
 
     mutex_unlock
     cleanup_lock
+
+    if [[ $RUNNING_AS_DAEMON -eq 1 && -n "$DAEMON_PIDFILE" && -f "$DAEMON_PIDFILE" ]]; then
+        rm $DAEMON_PIDFILE
+    fi
 }
 
 cleanup() {
@@ -1028,7 +1036,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1147,6 +1155,16 @@ while :; do
         --daemon)
             shift
             DAEMONIZE=1
+            ;;
+        --pidfile)
+            shift
+            DAEMON_PIDFILE="$1"
+            shift
+            ;;
+        --logfile)
+            shift
+            DAEMON_LOGFILE="$1"
+            shift
             ;;
         --stop)
             shift
@@ -1287,8 +1305,10 @@ fi
 if [[ $DAEMONIZE -eq 1 && $RUNNING_AS_DAEMON -eq 0 ]]; then
     echo "Running as Daemon..."
     # run a detached create_ap
-    RUNNING_AS_DAEMON=1 setsid "$0" "${ARGS[@]}" &
+    RUNNING_AS_DAEMON=1 setsid "$0" "${ARGS[@]}" >>$DAEMON_LOGFILE 2>&1 &
     exit 0
+elif [[ $RUNNING_AS_DAEMON -eq 1 && -n "$DAEMON_PIDFILE" ]]; then
+    echo $$ >$DAEMON_PIDFILE
 fi
 
 if [[ $FREQ_BAND != 2.4 && $FREQ_BAND != 5 ]]; then
