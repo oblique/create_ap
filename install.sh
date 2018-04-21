@@ -17,10 +17,19 @@ cd create_ap
 echo "installing create_ap from git clone"
 make install
 
+echo "Please enter the internet interface (eth0, wlan0 or wlxxxxxxxxxx): "
+read INTER
+echo "Please enter the hotspot interface  (wlan0 or wlxxxxxxxxxx): "
+read APFC
 echo "Please enter the BSSID network name: "
 read BSSID
 echo "Please enter the WPA2 Paasword to use: "
 read WPA2PASS
+
+#uncomment this to manually start create_ap with the $BBSID and $WPA2PASS provided at the start of this script
+sudo create_ap $APFC $INTER $BSSID $WPA2PASS
+echo "there should now be a network with the supplied name and key now."
+read -p
 
 echo "edit /etc/create_ap.conf"
 echo "make sure to set the right values"
@@ -33,8 +42,5 @@ sudo systemctl enable create_ap
 #uncomment this to start create_ap with systemctl
 #echo "start create_ap now (with settings from /etc/create_ap.conf)"
 sudo systemctl start create_ap
-
-#uncomment this to manually start create_ap with the $BBSID and $WPA2PASS provided at the start of this script
-#sudo create_ap wlan0 eth0 $BSSID $WPA2PASS
 
 echo "if all succedded there should now be a network with the supplied config"
