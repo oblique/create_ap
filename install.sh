@@ -17,6 +17,11 @@ cd create_ap
 echo "installing create_ap from git clone"
 make install
 
+echo "Please enter the BSSID network name: "
+read BSSID
+echo "Please enter the WPA2 Paasword to use: "
+read WPA2PASS
+
 echo "edit /etc/create_ap.conf"
 echo "make sure to set the right values"
 sudo nano /etc/create_ap.conf
