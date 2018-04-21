@@ -23,13 +23,13 @@ echo "Please enter the hotspot interface  (wlan0 or wlxxxxxxxxxx): "
 read APFC
 echo "Please enter the BSSID network name: "
 read BSSID
-echo "Please enter the WPA2 Paasword to use: "
+echo "Please enter the WPA2 Password to use: "
 read WPA2PASS
 
 #uncomment this to manually start create_ap with the $BBSID and $WPA2PASS provided at the start of this script
 sudo create_ap $APFC $INTER $BSSID $WPA2PASS
-echo "there should now be a network with the supplied name and key now."
-read -p
+echo "there should now be a network called $BSSID on $APFC connected with $INTER now."
+read -rsp $'Press enter to continue...\n'
 
 echo "edit /etc/create_ap.conf"
 echo "make sure to set the right values"
