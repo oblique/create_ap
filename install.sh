@@ -15,7 +15,7 @@ echo "cloning create_ap git"
 git clone https://github.com/itsdarklikehell/create_ap
 cd create_ap
 echo "installing create_ap from git clone"
-make install
+sudo make install
 
 echo "Please enter the internet interface (eth0, wlan0 or wlxxxxxxxxxx): "
 read INTER
