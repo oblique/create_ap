@@ -27,6 +27,7 @@ echo "Please enter the WPA2 Password to use: "
 read WPA2PASS
 
 #uncomment this to manually start create_ap with the $BBSID and $WPA2PASS provided at the start of this script
+cd ~/create_ap
 sudo create_ap $APFC $INTER $BSSID $WPA2PASS
 echo ""
 echo "there should now be a network called $BSSID on $APFC connected with $INTER now."
