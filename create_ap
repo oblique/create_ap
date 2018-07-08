@@ -1742,10 +1742,13 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # load nf_nat_pptp module
         modprobe nf_nat_pptp > /dev/null 2>&1
     elif [[ "$SHARE_METHOD" == "nft" ]]; then
+        nft table ip filter
+	nft add chain ip filter forward { type filter hook forward priority 0\; }
         nft table ip nat
-        nft add rule ip nat POSTROUTING oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
-        nft add rule ip filter FORWARD iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
-        nft add rule ip filter FORWARD iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
+	nft add chain ip nat postrouting { type nat hook postrouting priority 0\; }
+        nft add rule ip nat postrouting oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
+        nft add rule ip filter forward iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
+        nft add rule ip filter forward iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         modprobe nf_nat_pptp > /dev/null 2>&1
@@ -1824,7 +1827,7 @@ else
 fi
 
 # start dhcp + dns (optional)
-if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft"]]; then
+if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
         iptables -w -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
@@ -1853,13 +1856,15 @@ if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft"]]; then
 fi
 
 # start dhcp + dns (optional)
-if [[ "$SHARE_METHOD" == "nft"]]; then
+if [[ "$SHARE_METHOD" == "nft" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
-        nft insert rule ip filter INPUT tcp dport $DNS_PORT accept || die
-        nft insert rule ip filter INPUT ucp dport $DNS_PORT accept || die
-        nft insert rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT || die
-        nft insert rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT || die
+	nft add chain ip filter input { type filter hook input priority 0\; }
+        nft insert rule ip filter input tcp dport $DNS_PORT accept || die
+        nft insert rule ip filter input udp dport $DNS_PORT accept || die
+	nft add chain ip nat prerouting { type nat hook prerouting priority 0\; }
+        nft insert rule ip nat prerouting ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT || die
+        nft insert rule ip nat prerouting ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT || die
     else
         DNS_PORT=0
     fi
