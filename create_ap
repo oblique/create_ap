@@ -14,6 +14,10 @@
 #    dnsmasq
 #    iptables
 
+# dependencies for 'nft' Internet sharing method
+#    dnsmasq
+#    nftables
+
 VERSION=0.4.6
 PROGNAME="$(basename $0)"
 
@@ -720,6 +724,10 @@ _cleanup() {
             iptables -w -t nat -D POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE || die
             iptables -w -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -w -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
+        elif [[ "$SHARE_METHOD" == "nft" ]]; then
+            nft del rule ip nat POSTROUTING oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
+            nft del rule ip filter FORWARD iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
+            nft del rule ip filter FORWARD iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             if ! is_bridge_interface $INTERNET_IFACE; then
                 ip link set dev $BRIDGE_IFACE down
@@ -759,7 +767,7 @@ _cleanup() {
         fi
     fi
 
-    if [[ "$SHARE_METHOD" != "bridge" ]]; then
+    if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft" ]]; then
         if [[ $NO_DNS -eq 0 ]]; then
             iptables -w -D INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT
             iptables -w -D INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT
@@ -769,6 +777,16 @@ _cleanup() {
                 -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT
         fi
         iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+    fi
+
+    if [[ "$SHARE_METHOD" == "nft" ]]; then
+        if [[ $NO_DNS -eq 0 ]]; then
+            nft del rule ip filter INPUT tcp dport $DNS_PORT accept
+            nft del rule ip filter INPUT ucp dport $DNS_PORT accept
+            nft del rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT
+            nft del rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT
+        fi
+        nft del rule ip filter INPUT udp dport 67 accept || die
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1350,7 +1368,7 @@ if [[ $(get_adapter_kernel_module ${WIFI_IFACE}) =~ ^(8192[cd][ue]|8723a[sue])$ 
     fi
 fi
 
-if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
+if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" && "$SHARE_METHOD" != "nft" ]]; then
     echo "ERROR: Wrong Internet sharing method" >&2
     echo
     usage >&2
@@ -1492,7 +1510,7 @@ chmod 444 $CONFDIR/pid
 COMMON_CONFDIR=/tmp/create_ap.common.conf
 mkdir -p $COMMON_CONFDIR
 
-if [[ "$SHARE_METHOD" == "nat" ]]; then
+if [[ "$SHARE_METHOD" == "nat" || "$SHARE_METHOD" == "nft" ]]; then
     echo $INTERNET_IFACE > $CONFDIR/nat_internet_iface
     cp -n /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding \
        $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding
@@ -1723,6 +1741,14 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         # to enable clients to establish PPTP connections we must
         # load nf_nat_pptp module
         modprobe nf_nat_pptp > /dev/null 2>&1
+    elif [[ "$SHARE_METHOD" == "nft" ]]; then
+        nft table ip nat
+        nft add rule ip nat POSTROUTING oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
+        nft add rule ip filter FORWARD iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
+        nft add rule ip filter FORWARD iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
+        echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
+        echo 1 > /proc/sys/net/ipv4/ip_forward || die
+        modprobe nf_nat_pptp > /dev/null 2>&1
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         # disable iptables rules for bridged interfaces
         if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
@@ -1798,7 +1824,7 @@ else
 fi
 
 # start dhcp + dns (optional)
-if [[ "$SHARE_METHOD" != "bridge" ]]; then
+if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft"]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
         iptables -w -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
@@ -1825,6 +1851,34 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
       umask $SCRIPT_UMASK
     fi
 fi
+
+# start dhcp + dns (optional)
+if [[ "$SHARE_METHOD" == "nft"]]; then
+    if [[ $NO_DNS -eq 0 ]]; then
+        DNS_PORT=5353
+        nft insert rule ip filter INPUT tcp dport $DNS_PORT accept || die
+        nft insert rule ip filter INPUT ucp dport $DNS_PORT accept || die
+        nft insert rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT || die
+        nft insert rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT || die
+    else
+        DNS_PORT=0
+    fi
+
+    if [[ $NO_DNSMASQ -eq 0 ]]; then
+      nft insert rule ip filter INPUT udp dport 67 accept || die
+
+      if which complain > /dev/null 2>&1; then
+          # openSUSE's apparmor does not allow dnsmasq to read files.
+          # remove restriction.
+          complain dnsmasq
+      fi
+
+      umask 0033
+      dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
+      umask $SCRIPT_UMASK
+    fi
+fi
+
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
