@@ -728,6 +728,10 @@ _cleanup() {
         nft delete chain ip nat create_ap_postrouting
         nft delete rule ip filter create_ap_forward
         nft delete chain ip filter create_ap_forward
+        nft delete rule ip filter create_ap_input
+        nft delete chain ip filter create_ap_input
+        nft delete rule ip nat create_ap_prerouting
+        nft delete chain ip nat create_ap_prerouting
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         if ! is_bridge_interface $INTERNET_IFACE; then
             ip link set dev $BRIDGE_IFACE down
@@ -776,13 +780,6 @@ _cleanup() {
                 -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT
         fi
         iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
-    fi
-
-    if [[ "$SHARE_METHOD" == "nft" ]]; then
-        nft delete rule ip filter create_ap_input
-        nft delete chain ip filter create_ap_input
-        nft delete rule ip nat create_ap_prerouting
-        nft delete chain ip nat create_ap_prerouting
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
