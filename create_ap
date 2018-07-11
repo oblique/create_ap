@@ -724,14 +724,15 @@ _cleanup() {
         iptables -w -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
         iptables -w -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
     elif [[ "$SHARE_METHOD" == "nft" ]]; then
-        nft delete rule ip nat create_ap_postrouting
-        nft delete chain ip nat create_ap_postrouting
-        nft delete rule ip filter create_ap_forward
-        nft delete chain ip filter create_ap_forward
-        nft delete rule ip filter create_ap_input
+        # Flushing seems to be unnecessary on newer kernels
+        nft flush chain ip filter create_ap_input
+        nft flush chain ip filter create_ap_forward
+        nft flush chain ip nat create_ap_prerouting
+        nft flush chain ip nat create_ap_postrouting
         nft delete chain ip filter create_ap_input
-        nft delete rule ip nat create_ap_prerouting
+        nft delete chain ip filter create_ap_forward
         nft delete chain ip nat create_ap_prerouting
+        nft delete chain ip nat create_ap_postrouting
     elif [[ "$SHARE_METHOD" == "bridge" ]]; then
         if ! is_bridge_interface $INTERNET_IFACE; then
             ip link set dev $BRIDGE_IFACE down
@@ -1737,8 +1738,11 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
     elif [[ "$SHARE_METHOD" == "nft" ]]; then
         nft table ip filter
         nft add chain ip filter create_ap_forward { type filter hook forward priority 0\; }
+        nft add chain ip filter create_ap_input { type filter hook input priority 0\; }
         nft table ip nat
+        nft add chain ip nat create_ap_prerouting { type nat hook prerouting priority 0\; }
         nft add chain ip nat create_ap_postrouting { type nat hook postrouting priority 0\; }
+
         nft add rule ip nat create_ap_postrouting oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
         nft add rule ip filter create_ap_forward iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
         nft add rule ip filter create_ap_forward iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
@@ -1849,10 +1853,8 @@ if [[ "$SHARE_METHOD" == "none" || "$SHARE_METHOD" == "nat" ]]; then
 elif [[ "$SHARE_METHOD" == "nft" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
-        nft add chain ip filter create_ap_input { type filter hook input priority 0\; }
         nft insert rule ip filter create_ap_input tcp dport $DNS_PORT accept || die
         nft insert rule ip filter create_ap_input udp dport $DNS_PORT accept || die
-        nft add chain ip nat create_ap_prerouting { type nat hook prerouting priority 0\; }
         nft insert rule ip nat create_ap_prerouting ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT || die
         nft insert rule ip nat create_ap_prerouting ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT || die
     else
@@ -1860,7 +1862,6 @@ elif [[ "$SHARE_METHOD" == "nft" ]]; then
     fi
 
     if [[ $NO_DNSMASQ -eq 0 ]]; then
-      nft add chain ip filter create_ap_input { type filter hook input priority 0\; }
       nft insert rule ip filter create_ap_input udp dport 67 accept || die
 
       if which complain > /dev/null 2>&1; then
