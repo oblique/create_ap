@@ -53,7 +53,7 @@ _create_ap() {
             # No Options
             ;;
         -m)
-            opts="nat bridge none"
+            opts="nat nft bridge none"
             ;;
         --psk)
             # No Options
