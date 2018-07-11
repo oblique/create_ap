@@ -719,55 +719,54 @@ _cleanup() {
         rm -rf $COMMON_CONFDIR
     fi
 
-    if [[ "$SHARE_METHOD" != "none" ]]; then
-        if [[ "$SHARE_METHOD" == "nat" ]]; then
-            iptables -w -t nat -D POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE || die
-            iptables -w -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
-            iptables -w -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
-        elif [[ "$SHARE_METHOD" == "nft" ]]; then
-            nft del rule ip nat POSTROUTING oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
-            nft del rule ip filter FORWARD iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
-            nft del rule ip filter FORWARD iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
-        elif [[ "$SHARE_METHOD" == "bridge" ]]; then
-            if ! is_bridge_interface $INTERNET_IFACE; then
-                ip link set dev $BRIDGE_IFACE down
-                ip link set dev $INTERNET_IFACE down
-                ip link set dev $INTERNET_IFACE promisc off
-                ip link set dev $INTERNET_IFACE nomaster
-                ip link delete $BRIDGE_IFACE type bridge
-                ip addr flush $INTERNET_IFACE
-                ip link set dev $INTERNET_IFACE up
-                dealloc_iface $BRIDGE_IFACE
+    if [[ "$SHARE_METHOD" == "nat" ]]; then
+        iptables -w -t nat -D POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE || die
+        iptables -w -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
+        iptables -w -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
+    elif [[ "$SHARE_METHOD" == "nft" ]]; then
+        nft delete rule ip nat create_ap_postrouting
+        nft delete chain ip nat create_ap_postrouting
+        nft delete rule ip filter create_ap_forward
+        nft delete chain ip filter create_ap_forward
+    elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+        if ! is_bridge_interface $INTERNET_IFACE; then
+            ip link set dev $BRIDGE_IFACE down
+            ip link set dev $INTERNET_IFACE down
+            ip link set dev $INTERNET_IFACE promisc off
+            ip link set dev $INTERNET_IFACE nomaster
+            ip link delete $BRIDGE_IFACE type bridge
+            ip addr flush $INTERNET_IFACE
+            ip link set dev $INTERNET_IFACE up
+            dealloc_iface $BRIDGE_IFACE
 
-                for x in "${IP_ADDRS[@]}"; do
-                    x="${x/inet/}"
-                    x="${x/secondary/}"
-                    x="${x/dynamic/}"
-                    x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
-                    x="${x/${INTERNET_IFACE}/}"
-                    ip addr add $x dev $INTERNET_IFACE
-                done
+            for x in "${IP_ADDRS[@]}"; do
+                x="${x/inet/}"
+                x="${x/secondary/}"
+                x="${x/dynamic/}"
+                x=$(echo $x | sed 's/\([0-9]\)sec/\1/g')
+                x="${x/${INTERNET_IFACE}/}"
+                ip addr add $x dev $INTERNET_IFACE
+            done
 
-                ip route flush dev $INTERNET_IFACE
+            ip route flush dev $INTERNET_IFACE
 
-                for x in "${ROUTE_ADDRS[@]}"; do
-                    [[ -z "$x" ]] && continue
-                    [[ "$x" == default* ]] && continue
-                    ip route add $x dev $INTERNET_IFACE
-                done
+            for x in "${ROUTE_ADDRS[@]}"; do
+                [[ -z "$x" ]] && continue
+                [[ "$x" == default* ]] && continue
+                ip route add $x dev $INTERNET_IFACE
+            done
 
-                for x in "${ROUTE_ADDRS[@]}"; do
-                    [[ -z "$x" ]] && continue
-                    [[ "$x" != default* ]] && continue
-                    ip route add $x dev $INTERNET_IFACE
-                done
+            for x in "${ROUTE_ADDRS[@]}"; do
+                [[ -z "$x" ]] && continue
+                [[ "$x" != default* ]] && continue
+                ip route add $x dev $INTERNET_IFACE
+            done
 
-                networkmanager_rm_unmanaged_if_needed $INTERNET_IFACE
-            fi
+            networkmanager_rm_unmanaged_if_needed $INTERNET_IFACE
         fi
     fi
 
-    if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft" ]]; then
+    if [[ "$SHARE_METHOD" == "none" || "$SHARE_METHOD" == "nat" ]]; then
         if [[ $NO_DNS -eq 0 ]]; then
             iptables -w -D INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT
             iptables -w -D INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT
@@ -780,13 +779,10 @@ _cleanup() {
     fi
 
     if [[ "$SHARE_METHOD" == "nft" ]]; then
-        if [[ $NO_DNS -eq 0 ]]; then
-            nft del rule ip filter INPUT tcp dport $DNS_PORT accept
-            nft del rule ip filter INPUT ucp dport $DNS_PORT accept
-            nft del rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT
-            nft del rule ip nat PREROUTING ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT
-        fi
-        nft del rule ip filter INPUT udp dport 67 accept || die
+        nft delete rule ip filter create_ap_input
+        nft delete chain ip filter create_ap_input
+        nft delete rule ip nat create_ap_input
+        nft delete chain ip nat create_ap_input
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1743,12 +1739,12 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         modprobe nf_nat_pptp > /dev/null 2>&1
     elif [[ "$SHARE_METHOD" == "nft" ]]; then
         nft table ip filter
-	nft add chain ip filter forward { type filter hook forward priority 0\; }
+        nft add chain ip filter create_ap_forward { type filter hook forward priority 0\; }
         nft table ip nat
-	nft add chain ip nat postrouting { type nat hook postrouting priority 0\; }
-        nft add rule ip nat postrouting oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
-        nft add rule ip filter forward iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
-        nft add rule ip filter forward iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
+        nft add chain ip nat create_ap_postrouting { type nat hook postrouting priority 0\; }
+        nft add rule ip nat create_ap_postrouting oifname != ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 masquerade
+        nft add rule ip filter create_ap_forward iifname ${WIFI_IFACE} ip saddr ${GATEWAY%.*}.0/24 accept
+        nft add rule ip filter create_ap_forward iifname ${INTERNET_IFACE} ip daddr ${GATEWAY%.*}.0/24 accept
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
         modprobe nf_nat_pptp > /dev/null 2>&1
@@ -1827,7 +1823,7 @@ else
 fi
 
 # start dhcp + dns (optional)
-if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft" ]]; then
+if [[ "$SHARE_METHOD" == "none" || "$SHARE_METHOD" == "nat" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
         iptables -w -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
@@ -1853,16 +1849,13 @@ if [[ "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "nft" ]]; then
       dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid -l $CONFDIR/dnsmasq.leases -p $DNS_PORT || die
       umask $SCRIPT_UMASK
     fi
-fi
-
-# start dhcp + dns (optional)
-if [[ "$SHARE_METHOD" == "nft" ]]; then
+elif [[ "$SHARE_METHOD" == "nft" ]]; then
     if [[ $NO_DNS -eq 0 ]]; then
         DNS_PORT=5353
-	nft add chain ip filter input { type filter hook input priority 0\; }
+        nft add chain ip filter create_ap_input { type filter hook input priority 0\; }
         nft insert rule ip filter input tcp dport $DNS_PORT accept || die
         nft insert rule ip filter input udp dport $DNS_PORT accept || die
-	nft add chain ip nat prerouting { type nat hook prerouting priority 0\; }
+        nft add chain ip nat create_ap_prerouting { type nat hook prerouting priority 0\; }
         nft insert rule ip nat prerouting ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} tcp dport 53 redirect to :$DNS_PORT || die
         nft insert rule ip nat prerouting ip saddr ${GATEWAY%.*}.0/24 ip daddr ${GATEWAY} udp dport 53 redirect to :$DNS_PORT || die
     else
@@ -1870,7 +1863,8 @@ if [[ "$SHARE_METHOD" == "nft" ]]; then
     fi
 
     if [[ $NO_DNSMASQ -eq 0 ]]; then
-      nft insert rule ip filter INPUT udp dport 67 accept || die
+      nft add chain ip filter create_ap_input { type filter hook input priority 0\; }
+      nft insert rule ip filter create_ap_input udp dport 67 accept || die
 
       if which complain > /dev/null 2>&1; then
           # openSUSE's apparmor does not allow dnsmasq to read files.
