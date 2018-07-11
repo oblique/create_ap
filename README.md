@@ -21,9 +21,14 @@
 * iwconfig (you only need this if 'iw' can not recognize your adapter)
 * haveged (optional)
 
-### For 'NATed' or 'None' Internet sharing method
+### For 'nat' or 'none' Internet sharing method
 * dnsmasq
 * iptables
+
+
+### For 'nft' Internet sharing method
+* dnsmasq
+* nftables
 
 
 ## Installation
