@@ -74,6 +74,12 @@
 ### Client Isolation:
     create_ap --isolate-clients wlan0 eth0 MyAccessPoint MyPassPhrase
 
+### Enterprise Network built-in RADIUS
+    create_ap --enterprise --enterprise-eapfile=./users.eap_hosts --certificates=./certificates wlan0 eth0 MyAccessPoint 
+
+<!-- ### Enterprise Network Remote RADIUS
+    create_ap --enterprise --radius --radius-auth-server=192.168.1.1 --radius-auth-port=1812 --auth_server_shared_secret=P@ssw0rd wlan0 eth0 MyAccessPoint -->
+
 ## Systemd service
 Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service
 ### Start service immediately:
