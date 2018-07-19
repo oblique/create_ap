@@ -1,3 +1,21 @@
+# MANA
+Script has been modified to run [hostapd-mana](https://github.com/sensepost/hostapd-mana) with multiple options
+
+## Setup
+This script requires hostapd-mana to be in the path.
+
+This may be done by adding the binary to your path directly:
+```
+export PATH="$PATH:/path/to/hostapd-mana"
+```
+To make this permanent you may add to your shells .rc file
+
+or you may link hostapd-mana into a directory that is within your path
+```
+cd /usr/bin
+sudo ln -s /path/to/hostapd-mana hostapd-mana
+```
+
 ## Features
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).

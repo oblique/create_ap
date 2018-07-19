@@ -79,8 +79,7 @@ usage() {
     echo 
     echo "                          *Built in RADIUS server*"
     echo "  --eap-user-file         Full path to EAP user file"
-    echo "                          Example my be found at:"
-    echo "                          https://w1.fi/cgit/hostap/plain/hostapd/hostapd.eap_user"
+    echo "                          Default will use Manas hostapd.eap_user"
     echo "  --eap-cert-path         Full path to wireless certificates"
     echo "                          Name of the certs at the location:"
     echo "                              - ca.pem"
@@ -95,6 +94,14 @@ usage() {
     echo "                              --remote-radius <ip address>[:port]"
     echo "  --radius-secret         Provide shared RADIUS secret"
     echo 
+    echo "Mana Options:"
+    echo "  --mana                  Enable Mana Attack"
+    echo "                          Will respond affirmative to all device access point probes"
+    echo "  --mana-loud             Enable Mana loud mode"
+    echo "                          Will respond with all seen access points to devices"
+    echo "  --ennode                Set location of Ennode file"
+    echo "                          Default location is at /tmp/ennode.node"
+    echo
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
     echo "  --no-dnsmasq            Disable dnsmasq server completely"
@@ -643,6 +650,11 @@ ENTERPRISE=0
 ENTERPRISE_CERTIFICATES_LOCATION=
 ENTERPRISE_EAPUSER_FILE=
 ENTERPRISE_PRIVATE_KEY_PASSWD=
+MANA=0
+MANA_LOUD=0
+RADIUS_SERVER=
+RADIUS_SECRET=
+ENNODE=/tmp/ennode.node
 ISOLATE_CLIENTS=0
 SHARE_METHOD=nat
 IEEE80211N=0
@@ -664,7 +676,8 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK ENTERPRISE ENTERPRISE_CERTIFICATES_LOCATION ENTERPRISE_EAPUSER_FILE ENTERPRISE_PRIVATE_KEY_PASSWD)
+             SSID PASSPHRASE USE_PSK ENTERPRISE ENTERPRISE_CERTIFICATES_LOCATION ENTERPRISE_EAPUSER_FILE ENTERPRISE_PRIVATE_KEY_PASSWD 
+             RADIUS_SECRET RADIUS_SERVER MANA_LOUD MANA ENNODE)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -1055,7 +1068,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "eap","eap-user-file:","eap-cert-path:","eap-key-passwd:","radius-server:","radius-secret:","help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "eap","eap-user-file:","eap-cert-path:","eap-key-passwd:","radius-server:","radius-secret:","mana","mana-loud","ennode:","help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1101,6 +1114,19 @@ while :; do
             shift
             RADIUS_SECRET="$1"
             shift
+        --mana)
+            shift
+            MANA=1
+            ;;
+        --mana-loud)
+            shift
+            MANA_LOUD=1
+            ;;
+        --ennode)
+            shift
+            ENODE="$1"
+            shift
+            ;;
         --mac-filter)
             shift
             MAC_FILTER=1
@@ -1386,7 +1412,7 @@ if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     fi
 fi
 
-HOSTAPD=$(which hostapd)
+HOSTAPD=$(which hostapd-mana)
 
 if [[ ! -x "$HOSTAPD" ]]; then
     echo "ERROR: hostapd not found." >&2
@@ -1701,19 +1727,9 @@ if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_EAPUSER_FILE ]]; then
     echo "Please see $CONFDIR/hostapd.eap_user to create your own"
     # I am uncertain if /usr/share/doc/hostapd/hostapd.eap_user is static on all dists.
     cat << EOF >> $CONFDIR/hostapd.eap_user
-# Outer (phase 1) identities
-# Wildcard for all other identities
-"peap"  PEAP
-"ttls"          TTLS
-*               PEAP,TTLS,TLS,SIM,AKA
-
-# Phase 2 (tunnelled within EAP-PEAP or EAP-TTLS) users
-"md5"           MD5     "p"     [2]
-"chap"  MSCHAPV2        "p"     [2]
-#"t-gtc"                GTC     "p"     [2]
-"peap"  MSCHAPV2        "p"     [2]
-"user"          MD5,GTC,MSCHAPV2        "p"     [2]
-"ttls"  TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP,TTLS-MSCHAPV2    "p"     [2]
+*		PEAP,TTLS,TLS,FAST
+*		PEAP,TTLS-MSCHAPV2,MSCHAPV2,MD5,GTC,TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP  "1234test"  [2]
+"t"     PEAP,TTLS-MSCHAPV2,MSCHAPV2,MD5,GTC,TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP,TTLS  "1234test"  [2]
 EOF
     ENTERPRISE_EAPUSER_FILE=$CONFDIR/hostapd.eap_user
 fi
@@ -1750,7 +1766,17 @@ EOF
     fi
 fi
 
-if [[ $ENTERPRISE -eq 1 ]] && [[  ]]
+
+if [[ $MANA -eq 1 ]]; then
+    cat << EOF >> $CONFDIR/hostapd.conf
+enable_mana=1
+ennode=${ENNODE}
+EOF
+fi
+
+if [[ $MANA_LOUD -eq 1 ]]; then
+    echo "mana_loud=1" >> $CONFDIR/hostapd.conf
+fi
 
 if [[ $IEEE80211AC -eq 1 ]]; then
     echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
