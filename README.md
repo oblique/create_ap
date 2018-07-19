@@ -75,7 +75,7 @@
     create_ap --isolate-clients wlan0 eth0 MyAccessPoint MyPassPhrase
 
 ### Enterprise Network built-in RADIUS
-    create_ap --enterprise --enterprise-eapfile=./users.eap_hosts --certificates=./certificates wlan0 eth0 MyAccessPoint 
+    create_ap --eap --eap-user-file /tmp/users.eap_hosts --eap-cert-path /tmp/certificates wlan0 eth0 MyAccessPoint 
 
 <!-- ### Enterprise Network Remote RADIUS
     create_ap --enterprise --radius --radius-auth-server=192.168.1.1 --radius-auth-port=1812 --auth_server_shared_secret=P@ssw0rd wlan0 eth0 MyAccessPoint -->
