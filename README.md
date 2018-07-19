@@ -1,6 +1,7 @@
 ## Features
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
+* Support for Enterprise setups
 * Hide your SSID.
 * Disable communication between clients (client isolation).
 * IEEE 802.11n & 802.11ac support
@@ -77,8 +78,8 @@
 ### Enterprise Network built-in RADIUS
     create_ap --eap --eap-user-file /tmp/users.eap_hosts --eap-cert-path /tmp/certificates wlan0 eth0 MyAccessPoint 
 
-<!-- ### Enterprise Network Remote RADIUS
-    create_ap --enterprise --radius --radius-auth-server=192.168.1.1 --radius-auth-port=1812 --auth_server_shared_secret=P@ssw0rd wlan0 eth0 MyAccessPoint -->
+### Enterprise Network Remote RADIUS
+    create_ap --eap --radius-server 192.168.1.1:1812 --radius-secret=P@ssw0rd wlan0 eth0 MyAccessPoint
 
 ## Systemd service
 Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service

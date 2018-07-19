@@ -75,6 +75,9 @@ usage() {
     echo
     echo "Enterprise Options:"
     echo "  --eap                   Enable Enterprise (EAP) wireless settings"
+    echo "                          Default is to use built in RADIUS server"
+    echo 
+    echo "                          *Built in RADIUS server*"
     echo "  --eap-user-file         Full path to EAP user file"
     echo "                          Example my be found at:"
     echo "                          https://w1.fi/cgit/hostap/plain/hostapd/hostapd.eap_user"
@@ -85,6 +88,12 @@ usage() {
     echo "                              - server.key"
     echo "                          You will be prompted to generate a cert if no path is provided"
     echo "  --eap-key-passwd        If key requires a password"
+    echo 
+    echo "                          *Use external RADIUS server*"
+    echo "  --radius-server         Use an external RADIUS server rather than built in"
+    echo "                          Default port is 1812"
+    echo "                              --remote-radius <ip address>[:port]"
+    echo "  --radius-secret         Provide shared RADIUS secret"
     echo 
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
@@ -1046,7 +1055,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "eap","eap-user-file:","eap-cert-path:","eap-key-passwd:","help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "eap","eap-user-file:","eap-cert-path:","eap-key-passwd:","radius-server:","radius-secret:","help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1083,6 +1092,15 @@ while :; do
             ENTERPRISE_PRIVATE_KEY_PASSWD="$1"
             shift
             ;; 
+        --radius-server)
+            shift
+            read RADIUS_SERVER RADIUS_PORT <<< "${1//:/ }"
+            shift
+            ;;
+        --radius-secret)
+            shift
+            RADIUS_SECRET="$1"
+            shift
         --mac-filter)
             shift
             MAC_FILTER=1
@@ -1701,25 +1719,38 @@ EOF
 fi
 
 if [[ $ENTERPRISE -eq 1 ]]; then
-    cat << EOF >> $CONFDIR/hostapd.conf
+    if [[ -z $RADIUS_SERVER ]]; then
+        cat << EOF >> $CONFDIR/hostapd.conf
 eap_server=1
 eap_user_file=${ENTERPRISE_EAPUSER_FILE}
 ca_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/ca.pem
 server_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/server.pem
 private_key=${ENTERPRISE_CERTIFICATES_LOCATION}/server.key
 private_key_passwd=${ENTERPRISE_PRIVATE_KEY_PASSWD}
-# pac_opaque_encr_key=000102030405060708090a0b0c0d0e0f
-# eap_fast_a_id=101112131415161718191a1b1c1d1e1f
-# eap_fast_a_id_info=test server
-# eap_fast_prov=3
-# pac_key_lifetime=604800
-# pac_key_refresh_time=86400
 
 wpa=${WPA_VERSION}
 wpa_key_mgmt=WPA-EAP
 wpa_pairwise=TKIP CCMP
 EOF
+    else
+        if [[ -z $RADIUS_PORT ]]; then
+            $RADIUS_PORT=1812
+        fi
+        cat << EOF >> $CONFDIR/hostapd.conf
+eap_server=0
+
+auth_server_addr=${RADIUS_SERVER}
+auth_server_port=${RADIUS_PORT}
+auth_server_shared_secret=${RADIUS_SECRET}
+
+wpa=${WPA_VERSION}
+wpa_key_mgmt=WPA-EAP
+wpa_pairwise=TKIP CCMP
+EOF
+    fi
 fi
+
+if [[ $ENTERPRISE -eq 1 ]] && [[  ]]
 
 if [[ $IEEE80211AC -eq 1 ]]; then
     echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
