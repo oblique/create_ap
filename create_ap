@@ -75,10 +75,10 @@ usage() {
     echo
     echo "Enterprise Options:"
     echo "  --eap                   Enable Enterprise (EAP) wireless settings"
-    echo "  --eap-user-file         Path to EAP user file"
+    echo "  --eap-user-file         Full path to EAP user file"
     echo "                          Example my be found at:"
     echo "                          https://w1.fi/cgit/hostap/plain/hostapd/hostapd.eap_user"
-    echo "  --eap-cert-path         Path to wireless certificates"
+    echo "  --eap-cert-path         Full path to wireless certificates"
     echo "                          Name of the certs at the location:"
     echo "                              - ca.pem"
     echo "                              - server.pem"
