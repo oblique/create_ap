@@ -95,6 +95,7 @@ usage() {
     echo "                          Default port is 1812"
     echo "                              --remote-radius <ip address>[:port]"
     echo "  --radius-secret         Provide shared RADIUS secret"
+    echo "  --nas-ident             Provide NAS identity"
     echo 
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
