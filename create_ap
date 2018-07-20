@@ -1114,6 +1114,7 @@ while :; do
             shift
             RADIUS_SECRET="$1"
             shift
+            ;;
         --mana)
             shift
             MANA=1
