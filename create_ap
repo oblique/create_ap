@@ -1700,7 +1700,7 @@ ht_capab=${HT_CAPAB}
 EOF
 fi
 
-if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_CERTIFICATES_LOCATION ]]; then
+if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_CERTIFICATES_LOCATION ]] && [[ -z $RADIUS_SERVER ]]; then
     echo "Please Provide Certificate Details"
     $(which openssl) req -nodes -new -x509 -keyout $CONFDIR/hostapd.key.pem -out $CONFDIR/hostapd.cert.pem
     $(which openssl) dhparam -out $CONFDIR/hostapd.dh.pem 1024
@@ -1708,7 +1708,7 @@ if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_CERTIFICATES_LOCATION ]]; then
     ENTERPRISE_CERTIFICATES_LOCATION=$CONFDIR
 fi
 
-if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_EAPUSER_FILE ]]; then
+if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_EAPUSER_FILE ]] && [[ -z $RADIUS_SERVER ]]; then
     echo "Using Example EAP User file"
     echo "Please see $CONFDIR/hostapd.eap_user to create your own"
     # I am uncertain if /usr/share/doc/hostapd/hostapd.eap_user is static on all dists.
