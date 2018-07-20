@@ -18,18 +18,21 @@ sudo ln -s /path/to/hostapd-mana hostapd-mana
 
 ## Attacks
 
-Run Mana to trick users into connecting to your access point:
-The eap users file is not passed so that the default mana eap user file is used. 
-    `create_ap --eap --mana wlan0 eth0 MyAccessPoint `
+Run Mana to trick users into connecting to your access point. The eap users file is not passed so that the default mana eap user file is used: 
 
-Run Mana in loud mode to show devices every access point seen by Mana
-    `create_ap --eap --mana --mana-loud wlan0 eth0 MyAccessPoint `
+    create_ap --eap --mana wlan0 eth0 MyAccessPoint 
 
-Run Mana and bridge the network connection to your ethernet address. 
-    `create_ap --eap --mana -m bridge wlan0 eth0 MyAccessPoint `
+Run Mana in loud mode to show devices every access point seen by Mana:
 
-Run Mana and be stingy by not providing any upstream Internet access.
-    `create_ap --eap --mana -n wlan0 eth0 MyAccessPoint ` 
+    create_ap --eap --mana --mana-loud wlan0 eth0 MyAccessPoint 
+
+Run Mana and bridge the network connection to your ethernet address: 
+
+    create_ap --eap --mana -m bridge wlan0 eth0 MyAccessPoint 
+
+Run Mana and be stingy by not providing any upstream Internet access:
+
+    create_ap --eap --mana -n wlan0 eth0 MyAccessPoint  
 
 ## Features
 * Create an AP (Access Point) at any channel.
