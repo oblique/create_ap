@@ -83,9 +83,10 @@ usage() {
     echo "                          https://w1.fi/cgit/hostap/plain/hostapd/hostapd.eap_user"
     echo "  --eap-cert-path         Full path to wireless certificates"
     echo "                          Name of the certs at the location:"
-    echo "                              - ca.pem"
-    echo "                              - server.pem"
-    echo "                              - server.key"
+    echo "                              - hostapd.ca.pem"
+    echo "                              - hostapd.dh.pem"
+    echo "                              - hostapd.cert.pem"
+    echo "                              - hostapd.key.pem"
     echo "                          You will be prompted to generate a cert if no path is provided"
     echo "  --eap-key-passwd        If key requires a password"
     echo 
@@ -1693,8 +1694,9 @@ fi
 
 if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_CERTIFICATES_LOCATION ]]; then
     echo "Please Provide Certificate Details"
-    $(which openssl) req -nodes -new -x509 -keyout $CONFDIR/server.key -out $CONFDIR/server.pem
-    cp $CONFDIR/server.pem $CONFDIR/ca.pem
+    $(which openssl) req -nodes -new -x509 -keyout $CONFDIR/hostapd.key.pem -out $CONFDIR/hostapd.cert.pem
+    $(which openssl) dhparam -out $CONFDIR/hostapd.dh.pem 1024
+    cp $CONFDIR/hostapd.cert.pem $CONFDIR/hostapd.ca.pem
     ENTERPRISE_CERTIFICATES_LOCATION=$CONFDIR
 fi
 
@@ -1721,18 +1723,23 @@ EOF
 fi
 
 if [[ $ENTERPRISE -eq 1 ]]; then
+    [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
     if [[ -z $RADIUS_SERVER ]]; then
         cat << EOF >> $CONFDIR/hostapd.conf
+eapol_key_index_workaround=0
+ieee8021x=1
 eap_server=1
 eap_user_file=${ENTERPRISE_EAPUSER_FILE}
-ca_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/ca.pem
-server_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/server.pem
-private_key=${ENTERPRISE_CERTIFICATES_LOCATION}/server.key
+ca_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.ca.pem
+server_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.cert.pem
+dh_file=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.dh.pem
+private_key=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.key.pem
 private_key_passwd=${ENTERPRISE_PRIVATE_KEY_PASSWD}
 
+auth_algs=3
 wpa=${WPA_VERSION}
 wpa_key_mgmt=WPA-EAP
-wpa_pairwise=TKIP CCMP
+wpa_pairwise=CCMP
 EOF
     else
         if [[ -z $RADIUS_PORT ]]; then
@@ -1745,7 +1752,7 @@ auth_server_addr=${RADIUS_SERVER}
 auth_server_port=${RADIUS_PORT}
 auth_server_shared_secret=${RADIUS_SECRET}
 
-wpa=${WPA_VERSION}
+wpa=2
 wpa_key_mgmt=WPA-EAP
 wpa_pairwise=TKIP CCMP
 EOF
