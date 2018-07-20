@@ -1102,6 +1102,7 @@ while :; do
             shift
             RADIUS_SECRET="$1"
             shift
+            ;;
         --mac-filter)
             shift
             MAC_FILTER=1
