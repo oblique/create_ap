@@ -1,4 +1,4 @@
-# MANA
+# Create_ap MANA 
 Script has been modified to run [hostapd-mana](https://github.com/sensepost/hostapd-mana) with multiple options
 
 ## Setup
