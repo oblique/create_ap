@@ -34,6 +34,10 @@ Run Mana and be stingy by not providing any upstream Internet access:
 
     create_ap --eap --mana -n wlan0 eth0 MyAccessPoint  
 
+Run Mana and host one of each network type to catch as many people as possible.
+
+    create_ap --trifecta --mana wlan0 eth0 MyAccessPoint
+
 ## Features
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
