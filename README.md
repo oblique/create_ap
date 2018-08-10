@@ -32,7 +32,7 @@ Run Mana and bridge the network connection to your ethernet address:
 
 Run Mana and be stingy by not providing any upstream Internet access:
 
-    create_ap --eap --mana -n wlan0 eth0 MyAccessPoint  
+    create_ap --eap --mana -n wlan0 MyAccessPoint  
 
 Run Mana and host one of each network type to catch as many people as possible.
 

@@ -1744,10 +1744,10 @@ ht_capab=${HT_CAPAB}
 EOF
 fi
 
-if [[ $TRIFECTA -eq 1]]; then 
+if [[ $TRIFECTA -eq 1 ]]; then 
     ENTERPRISE=1
 cat << EOF >> $CONFDIR/hostapd.conf
-    bssid=00:11:22:33:44:00
+bssid=00:11:22:33:44:00
 EOF
 fi
 
@@ -1811,7 +1811,7 @@ EOF
     fi
 fi
 
-if [[ $TRIFECTA -eq 1]]; then 
+if [[ $TRIFECTA -eq 1 ]]; then 
     cat << EOF >> $CONFDIR/hostapd.conf
 # add PSK and OPEN
 bss=${WIFI_IFACE}_0
@@ -1821,6 +1821,7 @@ wpa=2
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 auth_algs=3
+wpa_passphrase=P@ssw0rd
 
 bss=${WIFI_IFACE}_1
 ssid=AlwaysOn
@@ -1832,6 +1833,7 @@ fi
 if [[ $MANA -eq 1 ]]; then
     cat << EOF >> $CONFDIR/hostapd.conf
 enable_mana=1
+mana_wpe=1
 mana_credout=${MANA_CREDOUT}
 EOF
 fi
