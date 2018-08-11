@@ -1,5 +1,5 @@
-# Create_ap MANA 
-Script has been modified to run [hostapd-mana](https://github.com/sensepost/hostapd-mana) with multiple options
+# Berate_ap 
+Create_ap has been modified to run [hostapd-mana](https://github.com/sensepost/hostapd-mana) with multiple options
 
 ## Setup
 This script requires hostapd-mana to be in the path.
@@ -34,9 +34,9 @@ Run Mana and be stingy by not providing any upstream Internet access:
 
     create_ap --eap --mana -n wlan0 MyAccessPoint  
 
-Run Mana and host one of each network type to catch as many people as possible.
+<!--Run Mana and host one of each network type to catch as many people as possible.
 
-    create_ap --trifecta --mana wlan0 eth0 MyAccessPoint
+    create_ap --trifecta --mana wlan0 eth0 MyAccessPoint -->
 
 ## Features
 * Create an AP (Access Point) at any channel.
