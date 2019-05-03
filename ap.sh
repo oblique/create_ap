@@ -1,6 +1,6 @@
 #!/bin/bash
 nmcli r wifi off
-rfkill unblock wlan
+rfkill unblock all
 killall -9 wpa_supplicant
 screen -dmS  ap create_ap -w 2 -c 9 wlan1 eth0 Illuminati confirmed1337! && screen -x ap
 #

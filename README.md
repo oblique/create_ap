@@ -1,51 +1,74 @@
 ## FOR HELP TYPE create_ap --help
 This was not in the original README.md or repository. I figured this out on my own.
 ## BEFORE USING THE PERSISTENT SERVICE PLEASE READ
-# 
-create_ap is going to read from the config at /etc/create_ap.conf not the one in the directory from the build.
-#
-## Do not forget to edit /etc/create_ap.conf before reboot.
-## Features
-* Create an AP (Access Point) at any channel.
-* Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
-* Hide your SSID.
-* Disable communication between clients (client isolation).
-* IEEE 802.11n & 802.11ac support
-* Internet sharing methods: NATed or Bridged or None (no Internet sharing).
-* Choose the AP Gateway IP (only for 'NATed' and 'None' Internet sharing methods).
-* You can create an AP with the same interface you are getting your Internet connection.
-* You can pass your SSID and password through pipe or through arguments (see examples).
 
+create_ap is going to read from the config at /etc/create_ap.conf not the one in the directory from the build.
+
+ Do not forget to edit /etc/create_ap.conf before reboot.
 
 ## Dependencies
 ### General
-* bash (to run this script)
-* util-linux (for getopt)
-* procps or procps-ng
-* hostapd
-* iproute2
-* iw
-* iwconfig (you only need this if 'iw' can not recognize your adapter)
-* haveged (optional)
-
-### For 'NATed' or 'None' Internet sharing method
-* dnsmasq
-* iptables
+    bash (to run this script)
+    util-linux (for getopt)
+    procps or procps-ng
+    hostapd
+    iproute2
+    iw
+    iwconfig (you only need this if 'iw' can not recognize your adapter)
+    haveged (optional)
+    dnsmasq
+    iptables
+    build-essential
+    linux-headers-generic (or linux-headers)
+    dkms
+    git
 
 
 ## Installation
-### Generic
-    git clone https://github.com/oblique/create_ap
+### Debian
+
+    git clone https://github.com/diveyez/create_ap
     cd create_ap
     make install
+    sudo bash install-dep.sh
+    sudo service hostapd stop
+    sudo service dnsmasq stop
+    sudo update-rc.d hostapd disable
+    sudo update-rc.d dnsmasq disable
 
-### ArchLinux
-    pacman -S create_ap
+    in terminal type: nano /etc/dnsmasq.conf and add the lines below to that file
+    ```
+    # Bind to only one interface
+    bind-interfaces
+    # Choose interface for binding
+    interface=wlan1
+    # Specify range of IP addresses for DHCP leasses
+    dhcp-range=10.10.10.1,10.10.10.10
+    ```
 
-### Gentoo
-    emerge layman
-    layman -f -a jorgicio
-    emerge net-wireless/create_ap
+    nano /etc/hostapd/hostapd.conf
+
+    ```
+    # Define interface
+    interface=wlan1
+    # Select driver
+    driver=nl80211
+    # Set access point name
+    ssid=Illuminati
+    # Set access point harware mode to 802.11g
+    hw_mode=g
+    # Set WIFI channel (can be easily changed)
+    channel=9
+    # Enable WPA2 only (1 for WPA, 2 for WPA2, 3 for WPA + WPA2)
+    wpa=2
+    wpa_passphrase=confirmed1337!
+
+    ### Start service immediately:
+    systemctl start create_ap
+
+    ### Start on boot:
+    systemctl enable create_ap
+
 
 ## Examples
 ### No passphrase (open network):
@@ -80,15 +103,3 @@ create_ap is going to read from the config at /etc/create_ap.conf not the one in
 
 ### Client Isolation:
     create_ap --isolate-clients wlan0 eth0 MyAccessPoint MyPassPhrase
-
-## Systemd service
-Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service
-### Start service immediately:
-    systemctl start create_ap
-
-### Start on boot:
-    systemctl enable create_ap
-
-
-## License
-FreeBSD
