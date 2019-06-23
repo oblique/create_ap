@@ -41,6 +41,7 @@ usage() {
     echo "                               'bridge' for bridging"
     echo "                               'none' for no Internet sharing (equivalent to -n)"
     echo "  --psk                   Use 64 hex digits pre-shared-key instead of passphrase"
+    echo "  --psk-file              Use wpa psk file instead of passphrase"
     echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
     echo "  --mac-filter            Enable MAC address filtering"
     echo "  --mac-filter-accept     Location of MAC address filter list (defaults to /etc/hostapd/hostapd.accept)"
@@ -630,6 +631,7 @@ NEW_MACADDR=
 DAEMONIZE=0
 NO_HAVEGED=0
 USE_PSK=0
+USE_PSK_FILE=0
 
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
@@ -1028,7 +1030,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","psk-file","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1174,6 +1176,10 @@ while :; do
         --psk)
             shift
             USE_PSK=1
+            ;;
+        --psk-file)
+            shift
+            USE_PSK_FILE=1
             ;;
         --no-dns)
             shift
@@ -1414,7 +1420,7 @@ else
             break
         done
         while :; do
-            if [[ $USE_PSK -eq 0 ]]; then
+            if [[ $USE_PSK -eq 0 && $USE_PSK_FILE -eq 0 ]]; then
                 read -p "Passphrase: " -s PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -lt 8 ]] || [[ ${#PASSPHRASE} -gt 63 ]]; then
@@ -1428,19 +1434,25 @@ else
                 else
                     break
                 fi
-            else
+            elif [[ $USE_PSK_FILE -eq 0 ]]; then
                 read -p "PSK: " PASSPHRASE
                 echo
                 if [[ ${#PASSPHRASE} -gt 0 && ${#PASSPHRASE} -ne 64 ]]; then
                     echo "ERROR: Invalid pre-shared-key length ${#PASSPHRASE} (expected 64)" >&2
                     continue
                 fi
+            else
+                read -p "WPA PSK file: " PASSPHRASE
             fi
         done
     else
         read SSID
         read PASSPHRASE
     fi
+fi
+
+if [[ $USE_PSK_FILE -eq 1 ]]; then
+    PSK_FILE=$PASSPHRASE
 fi
 
 if [[ "$SHARE_METHOD" != "none" ]] && ! is_interface $INTERNET_IFACE; then
@@ -1655,10 +1667,19 @@ if [[ -n "$PASSPHRASE" ]]; then
     fi
     cat << EOF >> $CONFDIR/hostapd.conf
 wpa=${WPA_VERSION}
-wpa_${WPA_KEY_TYPE}=${PASSPHRASE}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP
+EOF
+fi
+
+if [[ $USE_PSK_FILE -eq 0 ]]; then
+    cat << EOF >> $CONFDIR/hostapd.conf
+wpa_${WPA_KEY_TYPE}=${PASSPHRASE}
+EOF
+else
+    cat << EOF >> $CONFDIR/hostapd.conf
+wpa_psk_file=${PSK_FILE}
 EOF
 fi
 
