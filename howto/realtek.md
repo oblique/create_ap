@@ -62,7 +62,7 @@ If you're using any other distribution, run:
 ```
 git clone https://github.com/pritambaral/hostapd-rtl871xdrv.git
 cd hostapd-rtl871xdrv
-git checkout hostapd_2_5
+git checkout hostapd_2_2
 cd ..
 wget http://w1.fi/releases/hostapd-2.2.tar.gz
 tar zxvf hostapd-2.2.tar.gz
