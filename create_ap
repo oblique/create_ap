@@ -72,6 +72,9 @@ usage() {
     echo "                          You can get them with --list-running"
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
+    echo "  --radius-secret         Use Radius with this radius secret"
+    echo "  --radius-address        Address of the Radius server to connect to for Radius authentification"
+    echo "  --radius-port           Port of the Radius server to connect to for Radius authentification"
     echo
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
@@ -603,7 +606,8 @@ networkmanager_wait_until_unmanaged() {
     return 0
 }
 
-
+RADIUS_ADDRESS=localhost
+RADIUS_PORT=1812
 CHANNEL=default
 GATEWAY=192.168.12.1
 WPA_VERSION=1+2
@@ -1028,7 +1032,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "radius-secret:","radius-address:","radius-port:","help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1082,6 +1086,21 @@ while :; do
         -e)
             shift
             ADDN_HOSTS="$1"
+            shift
+            ;;
+        --radius-secret)
+            shift
+            RADIUS_SECRET="$1"
+            shift
+            ;;
+        --radius-address)
+            shift
+            RADIUS_ADDRESS="$1"
+            shift
+            ;;
+        --radius-port)
+            shift
+            RADIUS_PORT="$1"
             shift
             ;;
         -n)
@@ -1477,6 +1496,10 @@ if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
     exit 1
 fi
 
+if [[ -n "$PASSPHRASE" && -n "$RADIUS_SECRET" ]] ; then
+    echo "ERROR: You can not use password based authentification as well as Radius">&2
+    exit 1
+fi
 mutex_lock
 trap "cleanup" EXIT
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
@@ -1659,6 +1682,25 @@ wpa_${WPA_KEY_TYPE}=${PASSPHRASE}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP
+EOF
+fi
+
+if [[ -n "$RADIUS_SECRET" ]]; then
+    [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
+    cat << EOF >> $CONFDIR/hostapd.conf
+auth_algs=1
+auth_server_addr=${RADIUS_ADDRESS}
+auth_server_port=${RADIUS_PORT}
+auth_server_shared_secret=${RADIUS_SECRET}
+disable_pmksa_caching=1
+eapol_key_index_workaround=1
+ieee8021x=1
+wpa=${WPA_VERSION}
+wpa_group_rekey=2000
+wpa_key_mgmt=WPA-EAP
+wpa_pairwise=CCMP
+rsn_pairwise=CCMP
+rsn_preauth=1
 EOF
 fi
 
