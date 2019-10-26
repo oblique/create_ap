@@ -14,7 +14,7 @@
 #    dnsmasq
 #    iptables
 
-VERSION=0.4.6
+VERSION=0.4.6.0001-system/tstar
 PROGNAME="$(basename $0)"
 
 # make sure that all command outputs are in english
@@ -1216,7 +1216,7 @@ while :; do
 done
 
 # Load positional args from config file, if needed
-if [[ -n "$LOAD_CONFIG" && $# -eq 0 ]]; then
+if [[ -z "$LOAD_CONFIG" && $# -eq 0 ]]; then
     i=0
     # set arguments in order
     for x in WIFI_IFACE INTERNET_IFACE SSID PASSPHRASE; do
@@ -1230,8 +1230,11 @@ if [[ -n "$LOAD_CONFIG" && $# -eq 0 ]]; then
 fi
 
 # Check if required number of positional args are present
-if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
+if [[ -z "$LOAD_CONFIG" && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
       $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" ]]; then
+    usage >&2
+    exit 1
+elif [[ -z "$LOAD_CONFIG" && $# -lt 1 ]]; then
     usage >&2
     exit 1
 fi
@@ -1309,7 +1312,9 @@ if [[ $FREQ_BAND != 5 && $CHANNEL -gt 14 ]]; then
     FREQ_BAND=5
 fi
 
-WIFI_IFACE=$1
+if [[ -n "$LOAD_CONFIG" && $# -gt 0 ]]; then
+    WIFI_IFACE=$1
+fi
 
 if ! is_wifi_interface ${WIFI_IFACE}; then
     echo "ERROR: '${WIFI_IFACE}' is not a WiFi interface" >&2
@@ -1373,13 +1378,16 @@ if [[ -n "$NEW_MACADDR" ]]; then
     fi
 fi
 
-if [[ "$SHARE_METHOD" != "none" ]]; then
-    MIN_REQUIRED_ARGS=2
+if [[ -n "$LOAD_CONFIG" ]]; then
+    echo "INFO: using settings from $LOAD_CONFIG" >&2
 else
-    MIN_REQUIRED_ARGS=1
-fi
+    if [[ "$SHARE_METHOD" != "none" ]]; then
+        MIN_REQUIRED_ARGS=2
+    else
+        MIN_REQUIRED_ARGS=1
+    fi
 
-if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
+  if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 3 && $# -ne 4 ]]; then
             usage >&2
@@ -1396,7 +1404,7 @@ if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
         SSID="$2"
         PASSPHRASE="$3"
     fi
-else
+  else
     if [[ "$SHARE_METHOD" != "none" ]]; then
         if [[ $# -ne 2 ]]; then
             usage >&2
@@ -1441,6 +1449,7 @@ else
         read SSID
         read PASSPHRASE
     fi
+  fi
 fi
 
 if [[ "$SHARE_METHOD" != "none" ]] && ! is_interface $INTERNET_IFACE; then
