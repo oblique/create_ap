@@ -869,7 +869,7 @@ print_client() {
     if [[ -f $CONFDIR/dnsmasq.leases ]]; then
         line=$(grep " $mac " $CONFDIR/dnsmasq.leases | tail -n 1)
         ipaddr=$(echo $line | cut -d' ' -f3)
-        hostname=$(echo $line | cut -d' ' -f4)
+        hostname=$(echo "$line" | cut -d' ' -f4)
     fi
 
     [[ -z "$ipaddr" ]] && ipaddr="*"
