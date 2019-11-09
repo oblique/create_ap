@@ -73,6 +73,30 @@ usage() {
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
+    echo "Enterprise Options:"
+    echo "  --eap                   Enable Enterprise (EAP) wireless settings"
+    echo "                          Default is to use built in RADIUS server"
+    echo 
+    echo "                          *Built in RADIUS server*"
+    echo "  --eap-user-file         Full path to EAP user file"
+    echo "                          Example my be found at:"
+    echo "                          https://w1.fi/cgit/hostap/plain/hostapd/hostapd.eap_user"
+    echo "  --eap-cert-path         Full path to wireless certificates"
+    echo "                          Name of the certs at the location:"
+    echo "                              - hostapd.ca.pem"
+    echo "                              - hostapd.dh.pem"
+    echo "                              - hostapd.cert.pem"
+    echo "                              - hostapd.key.pem"
+    echo "                          You will be prompted to generate a cert if no path is provided"
+    echo "  --eap-key-passwd        If key requires a password"
+    echo 
+    echo "                          *Use external RADIUS server*"
+    echo "  --radius-server         Use an external RADIUS server rather than built in"
+    echo "                          Default port is 1812"
+    echo "                              --remote-radius <ip address>[:port]"
+    echo "  --radius-secret         Provide shared RADIUS secret"
+    echo "  --nas-ident             Provide NAS identity"
+    echo 
     echo "Non-Bridging Options:"
     echo "  --no-dns                Disable dnsmasq DNS server"
     echo "  --no-dnsmasq            Disable dnsmasq server completely"
@@ -99,6 +123,7 @@ usage() {
     echo "  "$PROGNAME" --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  "$PROGNAME" --daemon wlan0 eth0 MyAccessPoint MyPassPhrase"
     echo "  "$PROGNAME" --stop wlan0"
+    echo "  "$PROGNAME" --eap --eap-user-file /etc/hostapd/hostapd.eap_user wlan0 eth0 MyAccessPoint"
 }
 
 # on success it echos a non-zero unused FD
@@ -616,6 +641,13 @@ DNS_PORT=
 HIDDEN=0
 MAC_FILTER=0
 MAC_FILTER_ACCEPT=/etc/hostapd/hostapd.accept
+ENTERPRISE=0
+ENTERPRISE_CERTIFICATES_LOCATION=
+ENTERPRISE_EAPUSER_FILE=
+ENTERPRISE_PRIVATE_KEY_PASSWD=
+RADIUS_SERVER=
+RADIUS_SECRET=
+NAS_IDENT=
 ISOLATE_CLIENTS=0
 SHARE_METHOD=nat
 IEEE80211N=0
@@ -637,7 +669,8 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK)
+             SSID PASSPHRASE USE_PSK ENTERPRISE ENTERPRISE_CERTIFICATES_LOCATION ENTERPRISE_EAPUSER_FILE ENTERPRISE_PRIVATE_KEY_PASSWD
+             RADIUS_SERVER RADIUS_SECRET NAS_IDENT)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -1028,7 +1061,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "eap","eap-user-file:","eap-cert-path:","eap-key-passwd:","radius-server:","radius-secret:","nas-ident:","help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1045,6 +1078,40 @@ while :; do
         --hidden)
             shift
             HIDDEN=1
+            ;;
+        --eap)
+            shift
+            ENTERPRISE=1
+            ;;      
+        --eap-user-file)
+            shift
+            ENTERPRISE_EAPUSER_FILE="$1"
+            shift
+            ;;  
+        --eap-cert-path)
+            shift
+            ENTERPRISE_CERTIFICATES_LOCATION="$1"
+            shift
+            ;;
+        --eap-key-passwd)
+            shift
+            ENTERPRISE_PRIVATE_KEY_PASSWD="$1"
+            shift
+            ;; 
+        --radius-server)
+            shift
+            read RADIUS_SERVER RADIUS_PORT <<< "${1//:/ }"
+            shift
+            ;;
+        --radius-secret)
+            shift
+            RADIUS_SECRET="$1"
+            shift
+            ;;
+         --nas-ident)
+            shift
+            NAS_IDENT="$1"
+            shift
             ;;
         --mac-filter)
             shift
@@ -1633,6 +1700,77 @@ ieee80211n=1
 ht_capab=${HT_CAPAB}
 EOF
 fi
+
+if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_CERTIFICATES_LOCATION ]] && [[ -z $RADIUS_SERVER ]]; then
+    echo "Please Provide Certificate Details"
+    $(which openssl) req -nodes -new -x509 -keyout $CONFDIR/hostapd.key.pem -out $CONFDIR/hostapd.cert.pem
+    $(which openssl) dhparam -out $CONFDIR/hostapd.dh.pem 1024
+    cp $CONFDIR/hostapd.cert.pem $CONFDIR/hostapd.ca.pem
+    ENTERPRISE_CERTIFICATES_LOCATION=$CONFDIR
+fi
+
+if [[ $ENTERPRISE -eq 1 ]] && [[ -z $ENTERPRISE_EAPUSER_FILE ]] && [[ -z $RADIUS_SERVER ]]; then
+    echo "Using Example EAP User file"
+    echo "Please see $CONFDIR/hostapd.eap_user to create your own"
+    # I am uncertain if /usr/share/doc/hostapd/hostapd.eap_user is static on all dists.
+    cat << EOF >> $CONFDIR/hostapd.eap_user
+# Outer (phase 1) identities
+# Wildcard for all other identities
+"peap"  PEAP
+"ttls"          TTLS
+*               PEAP,TTLS,TLS,SIM,AKA
+
+# Phase 2 (tunnelled within EAP-PEAP or EAP-TTLS) users
+"md5"           MD5     "p"     [2]
+"chap"  MSCHAPV2        "p"     [2]
+#"t-gtc"                GTC     "p"     [2]
+"peap"  MSCHAPV2        "p"     [2]
+"user"          MD5,GTC,MSCHAPV2        "p"     [2]
+"ttls"  TTLS-PAP,TTLS-CHAP,TTLS-MSCHAP,TTLS-MSCHAPV2    "p"     [2]
+EOF
+    ENTERPRISE_EAPUSER_FILE=$CONFDIR/hostapd.eap_user
+fi
+
+if [[ $ENTERPRISE -eq 1 ]]; then
+    [[ "$WPA_VERSION" == "1+2" ]] && WPA_VERSION=3
+    if [[ -n $RADIUS_SERVER ]]; then
+        [[ -z $RADIUS_PORT ]] && RADIUS_PORT="1812"
+        [[ -z $NAS_IDENT ]] && NAS_IDENT=$(uuidgen)
+        cat << EOF >> $CONFDIR/hostapd.conf
+ieee8021x=1
+eap_server=0
+
+nas_identifier=${NAS_IDENT}
+
+auth_server_addr=${RADIUS_SERVER}
+auth_server_port=${RADIUS_PORT}
+auth_server_shared_secret=${RADIUS_SECRET}
+
+auth_algs=3
+wpa=${WPA_VERSION}
+wpa_key_mgmt=WPA-EAP
+wpa_pairwise=CCMP TKIP
+EOF
+    else
+        cat << EOF >> $CONFDIR/hostapd.conf
+ieee8021x=1
+eapol_key_index_workaround=0
+eap_server=1
+eap_user_file=${ENTERPRISE_EAPUSER_FILE}
+ca_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.ca.pem
+server_cert=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.cert.pem
+dh_file=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.dh.pem
+private_key=${ENTERPRISE_CERTIFICATES_LOCATION}/hostapd.key.pem
+private_key_passwd=${ENTERPRISE_PRIVATE_KEY_PASSWD}
+
+auth_algs=3
+wpa=${WPA_VERSION}
+wpa_key_mgmt=WPA-EAP
+wpa_pairwise=CCMP TKIP
+EOF
+    fi
+fi
+
 
 if [[ $IEEE80211AC -eq 1 ]]; then
     echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
