@@ -52,6 +52,7 @@ usage() {
     echo "  --ht_capab <HT>         HT capabilities (default: [HT40+])"
     echo "  --vht_capab <VHT>       VHT capabilities"
     echo "  --beacon-interval <ms>  Set beacon interval in milliseconds (default 100)"
+    echo "  --dtim-period <num>     Set DTIM period in numbers of beacons (default 2)"
     echo "  --country <code>        Set two-letter country code for regularity (example: US)"
     echo "  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
     echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
@@ -641,6 +642,7 @@ NO_VIRT=0
 COUNTRY=
 FREQ_BAND=2.4
 BEACON_INTERVAL=100
+DTIM_PERIOD=2
 NEW_MACADDR=
 DAEMONIZE=0
 DAEMON_PIDFILE=
@@ -654,7 +656,7 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK BEACON_INTERVAL)
+             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -1642,6 +1644,7 @@ ctrl_interface_group=0
 ignore_broadcast_ssid=$HIDDEN
 ap_isolate=$ISOLATE_CLIENTS
 beacon_int=${BEACON_INTERVAL}
+dtim_period=${DTIM_PERIOD}
 EOF
 
 if [[ -n "$COUNTRY" ]]; then
