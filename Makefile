@@ -8,7 +8,7 @@ all:
 
 install:
 	install -Dm755 create_ap $(DESTDIR)$(BINDIR)/create_ap
-	install -Dm644 create_ap.conf $(DESTDIR)/etc/create_ap.conf
+	install -Dm644 --backup=existing --suffix=.orig create_ap.conf $(DESTDIR)/etc/create_ap.conf
 	[ ! -d /lib/systemd/system ] || install -Dm644 create_ap.service $(DESTDIR)$(PREFIX)/lib/systemd/system/create_ap.service
 	[ ! -e /sbin/openrc-run ] || install -Dm755 create_ap.openrc $(DESTDIR)/etc/init.d/create_ap
 	install -Dm644 bash_completion $(DESTDIR)$(PREFIX)/share/bash-completion/completions/create_ap
