@@ -1025,6 +1025,9 @@ read_config() {
     local opt_name opt_val line
 
     while read line; do
+        # Skip comments and blank lines
+        [[ -z "${line}" || "${line:0:1}" == "#" ]] && continue
+
         # Read switches and their values
         opt_name="${line%%=*}"
         opt_val="${line#*=}"
