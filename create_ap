@@ -63,6 +63,7 @@ usage() {
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP (default is gateway; see also --no-dns below)"
+    echo "  --dhcp-dns6 <IP1[,IP2]> Set DNSv6 returned by DHCP (default is gateway; see also --no-dns below)"
     echo "  --daemon                Run create_ap in the background"
     echo "  --pidfile <pidfile>     Save daemon PID to file"
     echo "  --logfile <logfile>     Save daemon messages to file"
@@ -81,6 +82,7 @@ usage() {
     echo "  --no-dns                Disable dnsmasq DNS server (prevents clients from using Access Point for DNS)"
     echo "  --no-dnsmasq            Disable dnsmasq completely (implies --no-dns and also disables DHCP)"
     echo "  -g <gateway>            IPv4 Gateway address for the Access Point (default: 192.168.12.1)"
+    echo "  --ipv6                  Enable IPv6 support"
     echo "  -d                      DNS server will take into account /etc/hosts"
     echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
     echo
@@ -627,6 +629,7 @@ WPA_VERSION=1+2
 ETC_HOSTS=0
 ADDN_HOSTS=
 DHCP_DNS=gateway
+DHCP_DNS6=gateway
 NO_DNS=0
 NO_DNSMASQ=0
 DNS_PORT=
@@ -651,14 +654,15 @@ DAEMON_PIDFILE=
 DAEMON_LOGFILE=/dev/null
 NO_HAVEGED=0
 USE_PSK=0
+IPV6=0
 
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
 
-CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
+CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS DHCP_DNS6 NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD)
+             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -710,6 +714,14 @@ _cleanup() {
         cp -f $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding \
            /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding
         rm -f $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding
+
+        cp -f $COMMON_CONFDIR/ipv6_forwarding \
+           /proc/sys/net/ipv6/conf/all/forwarding
+        rm -f $COMMON_CONFDIR/ipv6_forwarding
+
+        cp -f $COMMON_CONFDIR/${INTERNET_IFACE}_ipv6_forwarding \
+           /proc/sys/net/ipv6/conf/$INTERNET_IFACE/forwarding
+        rm -f $COMMON_CONFDIR/${INTERNET_IFACE}_ipv6_forwarding
     fi
 
     # if we are the last create_ap instance then set back the common values
@@ -732,6 +744,12 @@ _cleanup() {
             fi
             rm -f $COMMON_CONFDIR/bridge-nf-call-iptables
         fi
+        if [[ -f $COMMON_CONFDIR/bridge-nf-call-ip6tables ]]; then
+            if [[ -e /proc/sys/net/bridge/bridge-nf-call-ip6tables ]]; then
+                cp -f $COMMON_CONFDIR/bridge-nf-call-ip6tables /proc/sys/net/bridge
+            fi
+            rm -f $COMMON_CONFDIR/bridge-nf-call-ip6tables
+        fi
 
         rm -rf $COMMON_CONFDIR
     fi
@@ -741,6 +759,7 @@ _cleanup() {
             iptables -w -t nat -D POSTROUTING -s ${GATEWAY%.*}.0/24 ! -o ${WIFI_IFACE} -j MASQUERADE
             iptables -w -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
             iptables -w -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
+            # FIXME: restore ip6tables?
         elif [[ "$SHARE_METHOD" == "bridge" ]]; then
             if ! is_bridge_interface $INTERNET_IFACE; then
                 ip link set dev $BRIDGE_IFACE down
@@ -788,8 +807,21 @@ _cleanup() {
                 -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT
             iptables -w -t nat -D PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
                 -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT
+            if [[ "$IPV6" -ne 0 ]]; then
+                ip6tables -w -D INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT
+                ip6tables -w -D INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT
+                ip6tables -w -t nat -D PREROUTING -s ${GATEWAY6}/$PREFIXLEN6 -d ${GATEWAY6} \
+                    -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT
+                ip6tables -w -t nat -D PREROUTING -s ${GATEWAY6}/$PREFIXLEN6 -d ${GATEWAY6} \
+                    -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT
+            fi
         fi
         iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+        if [[ $IPV6 -ne 0 ]]; then
+            ip6tables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+            ip -6 route del "$INTERNET6"/"$PREFIXLEN6" dev $WIFI_IFACE
+            ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev $INTERNET_IFACE
+        fi
     fi
 
     if [[ $NO_VIRT -eq 0 ]]; then
@@ -1056,7 +1088,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","ipv6","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1102,6 +1134,10 @@ while :; do
             shift
             GATEWAY="$1"
             shift
+            ;;
+        --ipv6)
+            shift
+            IPV6=1
             ;;
         -d)
             shift
@@ -1170,6 +1206,11 @@ while :; do
         --dhcp-dns)
             shift
             DHCP_DNS="$1"
+            shift
+            ;;
+        --dhcp-dns6)
+            shift
+            DHCP_DNS6="$1"
             shift
             ;;
         --daemon)
@@ -1540,10 +1581,17 @@ if [[ "$SHARE_METHOD" == "nat" ]]; then
     echo $INTERNET_IFACE > $CONFDIR/nat_internet_iface
     cp_n /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding \
        $COMMON_CONFDIR/${INTERNET_IFACE}_forwarding
+    cp_n /proc/sys/net/ipv6/conf/all/forwarding \
+       $COMMON_CONFDIR/ipv6_forwarding
+    cp_n /proc/sys/net/ipv6/conf/${INTERNET_IFACE}/forwarding \
+       $COMMON_CONFDIR/${INTERNET_IFACE}_ipv6_forwarding
 fi
 cp_n /proc/sys/net/ipv4/ip_forward $COMMON_CONFDIR
 if [[ -e /proc/sys/net/bridge/bridge-nf-call-iptables ]]; then
     cp_n /proc/sys/net/bridge/bridge-nf-call-iptables $COMMON_CONFDIR
+fi
+if [[ -e /proc/sys/net/bridge/bridge-nf-call-ip6tables ]]; then
+    cp_n /proc/sys/net/bridge/bridge-nf-call-ip6tables $COMMON_CONFDIR
 fi
 mutex_unlock
 
@@ -1552,6 +1600,22 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
         BRIDGE_IFACE=$INTERNET_IFACE
     else
         BRIDGE_IFACE=$(alloc_new_iface br)
+    fi
+elif [[ $IPV6 -ne 0 ]]; then
+    echo "Looking up IPv6 address of internet interface..."
+    NETADDR6=$(ip -6 addr show $INTERNET_IFACE scope global | sed -e 's/ /\n/g' | sed -ne '/inet6/{n;p}')
+    if [[ -n "$NETADDR6" ]]; then
+        INTERNET6="${NETADDR6%/*}"
+        PREFIXLEN6="${NETADDR6#*/}"
+        # FIXME: this is a dodgy/bad way to pick an IPv6 address.
+        # We want a different IPv6 address for the AP (internal),
+        # compared to our external IPv6 address, but they need to be
+        # in the same /64 subnet. This is the current ugly kludge.
+        GATEWAY6="${INTERNET6%:*}":$(printf "%04x" "$(( 0x${INTERNET6##*:} + 1))")
+        echo "Got $INTERNET6/$PREFIXLEN6. Will route $GATEWAY6/$PREFIXLEN6 to clients."
+    else
+        echo "No IPv6 address found. Disabling IPv6."
+        IPV6=0
     fi
 fi
 
@@ -1721,13 +1785,28 @@ elif [[ $NO_DNSMASQ -eq 0 ]]; then
     if [[ "$DHCP_DNS" == "gateway" ]]; then
         DHCP_DNS="$GATEWAY"
     fi
+    if [[ "$DHCP_DNS6" == "gateway" ]]; then
+        DHCP_DNS6="[$GATEWAY6]"
+    fi
     cat << EOF > $CONFDIR/dnsmasq.conf
-listen-address=${GATEWAY}
+interface=${WIFI_IFACE}
 ${DNSMASQ_BIND}
 dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option-force=option:router,${GATEWAY}
 dhcp-option-force=option:dns-server,${DHCP_DNS}
 EOF
+    if [[ $IPV6 -ne 0 ]]; then
+        if [[ "$NO_DNS" -ne 0 ]]; then
+            RA_MODE="ra-names"
+        else
+            RA_MODE="ra-stateless"
+        fi
+        [[ -n "$DHCP_DNS6" ]] && echo "dhcp-option-force=option6:dns-server,${DHCP_DNS6}" >> $CONFDIR/dnsmasq.conf
+        cat <<EOF >> $CONFDIR/dnsmasq.conf
+dhcp-range=::,constructor:${WIFI_IFACE}, $RA_MODE, slaac, 24h
+dhcp-authoritative
+EOF
+    fi
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
     [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
@@ -1754,6 +1833,15 @@ fi
 if [[ "$SHARE_METHOD" != "bridge" ]]; then
     ip link set up dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+    if [[ $IPV6 -ne 0 ]]; then
+        # Keep only /128 for Internet-facing IPv6 address
+        ip -6 addr del "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
+        ip -6 addr add "$INTERNET6"/128 dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
+        ip -6 route replace "$INTERNET6"/128 dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
+        # While routing full IPv6 subnet to clients
+        ip -6 addr add "$GATEWAY6"/"$PREFIXLEN6" dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+        ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+    fi
 fi
 
 # enable Internet sharing
@@ -1765,6 +1853,17 @@ if [[ "$SHARE_METHOD" != "none" ]]; then
         iptables -w -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
         echo 1 > /proc/sys/net/ipv4/conf/$INTERNET_IFACE/forwarding || die
         echo 1 > /proc/sys/net/ipv4/ip_forward || die
+        if [[ $IPV6 -ne 0 ]]; then
+            # This enables forwarding of *all* IPv6 packets, which is handy for running an IPv6
+            # server on a device inside the network without NAT...
+            ip6tables -P FORWARD ACCEPT || die
+            # ... but if you want something that prevents random incoming connections, try:
+            #ip6tables -P FORWARD DENY || die
+            #ip6tables -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT || die
+            #ip6tables -I FORWARD -i ${WIFI_IFACE} -j ACCEPT || die
+            echo 1 > /proc/sys/net/ipv6/conf/$INTERNET_IFACE/forwarding || die
+            echo 1 > /proc/sys/net/ipv6/conf/all/forwarding || die
+        fi
         # to enable clients to establish PPTP connections we must
         # load nf_nat_pptp module
         modprobe nf_nat_pptp > /dev/null 2>&1
@@ -1852,12 +1951,23 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
             -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT || die
         iptables -w -t nat -I PREROUTING -s ${GATEWAY%.*}.0/24 -d ${GATEWAY} \
             -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT || die
+        if [[ $IPV6 -ne 0 ]]; then
+            ip6tables -w -I INPUT -p tcp -m tcp --dport $DNS_PORT -j ACCEPT || die
+            ip6tables -w -I INPUT -p udp -m udp --dport $DNS_PORT -j ACCEPT || die
+            ip6tables -w -t nat -I PREROUTING -s ${GATEWAY6}/$PREFIXLEN6 -d ${GATEWAY6} \
+                -p tcp -m tcp --dport 53 -j REDIRECT --to-ports $DNS_PORT || die
+            ip6tables -w -t nat -I PREROUTING -s ${GATEWAY6}/$PREFIXLEN6 -d ${GATEWAY6} \
+                -p udp -m udp --dport 53 -j REDIRECT --to-ports $DNS_PORT || die
+        fi
     else
         DNS_PORT=0
     fi
 
     if [[ $NO_DNSMASQ -eq 0 ]]; then
       iptables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+      if [[ $IPV6 -ne 0 ]]; then
+          ip6tables -w -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+      fi
 
       if which complain > /dev/null 2>&1; then
           # openSUSE's apparmor does not allow dnsmasq to read files.
