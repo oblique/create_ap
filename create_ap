@@ -434,6 +434,28 @@ get_new_macaddr() {
     echo $NEWMAC
 }
 
+get_ipv6addr() {
+    ip -6 addr show "$1" scope global | sed -e 's/ /\n/g' | sed -ne '/inet6/{n;p}' | tail -n1
+}
+
+get_new_ipv6addr() {
+    local OLDIP NEWIP LAST_CHUNK i
+    OLDIP=$(get_ipv6addr "$1")
+    OLDIP="${OLDIP%/*}"
+    mutex_lock
+    for i in {1..65535}; do
+        if [[ "$OLDIP" == ::* ]]; then
+            NEWIP="${OLDIP}::$(printf %04x $i)"
+        else
+            LAST_CHUNK=$(printf %d 0x${OLDIP##*:})
+            NEWIP="${OLDIP%:*}:$(printf %02x $(( ($LAST_CHUNK + $i) % 65536 )))"
+            ip -6 addr show "$1" scope global | sed -e 's/ /\n/g' | sed -ne '/inet6/{n;p}' | grep "$NEWIP" > /dev/null 2>&1 || break
+        fi
+    done
+    mutex_unlock
+    echo $NEWIP
+}
+
 # start haveged when needed
 haveged_watchdog() {
     local show_warn=1
@@ -819,8 +841,10 @@ _cleanup() {
         iptables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
         if [[ $IPV6 -ne 0 ]]; then
             ip6tables -w -D INPUT -p udp -m udp --dport 67 -j ACCEPT
-            ip -6 route del "$INTERNET6"/"$PREFIXLEN6" dev $WIFI_IFACE
-            ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev $INTERNET_IFACE
+            # Restore original subnet to internet-facing interface
+            ip -6 addr del "$INTERNET6"/128 dev ${INTERNET_IFACE}
+            ip -6 addr add "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE}
+            ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE}
         fi
     fi
 
@@ -1603,16 +1627,12 @@ if [[ "$SHARE_METHOD" == "bridge" ]]; then
     fi
 elif [[ $IPV6 -ne 0 ]]; then
     echo "Looking up IPv6 address of internet interface..."
-    NETADDR6=$(ip -6 addr show $INTERNET_IFACE scope global | sed -e 's/ /\n/g' | sed -ne '/inet6/{n;p}')
+    NETADDR6=$(get_ipv6addr $INTERNET_IFACE)
     if [[ -n "$NETADDR6" ]]; then
         INTERNET6="${NETADDR6%/*}"
         PREFIXLEN6="${NETADDR6#*/}"
-        # FIXME: this is a dodgy/bad way to pick an IPv6 address.
-        # We want a different IPv6 address for the AP (internal),
-        # compared to our external IPv6 address, but they need to be
-        # in the same /64 subnet. This is the current ugly kludge.
-        GATEWAY6="${INTERNET6%:*}":$(printf "%04x" "$(( 0x${INTERNET6##*:} + 1))")
-        echo "Got $INTERNET6/$PREFIXLEN6. Will route $GATEWAY6/$PREFIXLEN6 to clients."
+        GATEWAY6=$(get_new_ipv6addr $INTERNET_IFACE)
+        echo "Internet interface is $INTERNET6/$PREFIXLEN6. Will route $GATEWAY6/$PREFIXLEN6 to wireless clients."
     else
         echo "No IPv6 address found. Disabling IPv6."
         IPV6=0
@@ -1834,11 +1854,14 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
     ip link set up dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     if [[ $IPV6 -ne 0 ]]; then
-        # Keep only /128 for Internet-facing IPv6 address
+        # Normally, the Internet-facing device has been assigned a /64 subnet (saved in INTERNET6/PREFIXLEN6).
+        # We want to keep only /128 for the Internet-facing device, but route the rest of the subnet to
+        # the AP, so that it can be used by clients via DHCPv6 or SLAAC.
+
         ip -6 addr del "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
         ip -6 addr add "$INTERNET6"/128 dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
         ip -6 route replace "$INTERNET6"/128 dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
-        # While routing full IPv6 subnet to clients
+
         ip -6 addr add "$GATEWAY6"/"$PREFIXLEN6" dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
         ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     fi
