@@ -844,7 +844,6 @@ _cleanup() {
             # Restore original subnet to internet-facing interface
             ip -6 addr del "$INTERNET6"/128 dev ${INTERNET_IFACE}
             ip -6 addr add "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE}
-            ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE}
         fi
     fi
 
@@ -1822,10 +1821,7 @@ EOF
             RA_MODE="ra-stateless"
         fi
         [[ -n "$DHCP_DNS6" ]] && echo "dhcp-option-force=option6:dns-server,${DHCP_DNS6}" >> $CONFDIR/dnsmasq.conf
-        cat <<EOF >> $CONFDIR/dnsmasq.conf
-dhcp-range=::,constructor:${WIFI_IFACE}, $RA_MODE, slaac, 24h
-dhcp-authoritative
-EOF
+        echo "dhcp-range=::,constructor:${WIFI_IFACE}, $RA_MODE, slaac, 24h" >> $CONFDIR/dnsmasq.conf
     fi
     MTU=$(get_mtu $INTERNET_IFACE)
     [[ -n "$MTU" ]] && echo "dhcp-option-force=option:mtu,${MTU}" >> $CONFDIR/dnsmasq.conf
@@ -1860,10 +1856,8 @@ if [[ "$SHARE_METHOD" != "bridge" ]]; then
 
         ip -6 addr del "$INTERNET6"/"$PREFIXLEN6" dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
         ip -6 addr add "$INTERNET6"/128 dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
-        ip -6 route replace "$INTERNET6"/128 dev ${INTERNET_IFACE} || die "$VIRTDIEMSG"
 
         ip -6 addr add "$GATEWAY6"/"$PREFIXLEN6" dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
-        ip -6 route replace "$INTERNET6"/"$PREFIXLEN6" dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
     fi
 fi
 
