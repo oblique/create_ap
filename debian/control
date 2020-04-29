@@ -1,0 +1,11 @@
+Source: create-ap
+Section: admin
+Priority: optional
+Maintainer: Andoni del Olmo <andoni.delolmo@gmail.com>
+Build-Depends: debhelper (>=9)
+Standards-Version: 3.9.4
+Homepage: https://github.com/adelolmo/create_ap
+
+Package: create-ap
+Architecture: any
+Description: Create a NATed or Bridged WiFi Access Point.

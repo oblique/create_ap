@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+export DH_OPTIONS
+
+%:
+	dh $@
+
+clean:
+	rm -f debian/*.debhelper.log
+	dh_clean
+
+override_dh_auto_install:
+	dh_auto_install
+	rm -rf debian/create-ap/usr/lib
+	install -Dm644 create_ap.service debian/create-ap/lib/systemd/system/create_ap.service

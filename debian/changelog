@@ -1,0 +1,37 @@
+create-ap (0.4.6~ado1) unstable; urgency=medium
+
+  [ oblique ]
+  * Forgot to delete new NATing rule
+  * Version 0.4.6
+
+  [ Guillaume Rousse ]
+  * add additional hosts file option
+  * kill spurious space
+
+  [ Stan Domula ]
+  * add option to disable dnsmasq handling
+  * add usage for --no-dnsmasq
+  * make --no-dnsmasq usage text shorter
+  * setting no-dnsmasq will implicitly set no-dns
+  * check for NO_DNSMASQ after config loading
+
+  [ Alexandre Ghiti ]
+  * create_ap: Check if stdbuf is available
+
+  [ Gary Williams ]
+  * fix dns_port hard code
+
+  [ Taeyeon Mori ]
+  * Add --pidfile and --logfile for daemon mode
+  * Polyfill cp -n for busybox
+  * Add OpenRC initscript
+  * echo's trailing newline seems to sometimes cause EINVAL in sysfs/forward_delay
+  * Avoid printing to stdout in daemon mode
+
+  [ Gary Williams ]
+  * fix #338
+
+  [ c79 ]
+  * Fix hostname showing directory when no hostname
+
+ -- Andoni del Olmo <andoni.delolmo@gmail.com>  Wed, 29 Apr 2020 21:15:31 +0200
