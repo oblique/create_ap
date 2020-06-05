@@ -61,6 +61,7 @@ usage() {
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP"
+    echo "  --wps                   Enable WPS"
     echo "  --daemon                Run create_ap in the background"
     echo "  --pidfile <pidfile>     Save daemon PID to file"
     echo "  --logfile <logfile>     Save daemon messages to file"
@@ -645,6 +646,7 @@ DAEMON_PIDFILE=
 DAEMON_LOGFILE=/dev/null
 NO_HAVEGED=0
 USE_PSK=0
+WPS=0
 
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
@@ -652,7 +654,7 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK)
+             SSID PASSPHRASE USE_PSK WPS)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -1047,7 +1049,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","wps","no-haveged","no-dns","no-dnsmasq","mkconfig:","config:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1203,6 +1205,10 @@ while :; do
         --psk)
             shift
             USE_PSK=1
+            ;;
+        --wps)
+            shift
+            WPS=1
             ;;
         --no-dns)
             shift
@@ -1728,6 +1734,26 @@ address=/#/$GATEWAY
 EOF
     fi
 fi
+
+if [[ $WPS -eq 1 ]]; then
+    echo "To press the virtual WPS button, run:"
+    echo "hostapd_cli -p$CONFDIR/hostapd_ctrl wps_pbc"
+    cat << EOF >> $CONFDIR/hostapd.conf
+eap_server=1
+wps_state=2
+ap_setup_locked=1
+wps_pin_requests=$CONFDIR/hostapd.pin-req
+device_name=Wireless AP
+manufacturer=create_ap
+model_name=WAP
+model_number=123
+serial_number=12345
+device_type=6-0050F204-1
+os_version=01020300
+config_methods=label display push_button keypad
+EOF
+fi
+
 
 # initialize WiFi interface
 if [[ $NO_VIRT -eq 0 && -n "$NEW_MACADDR" ]]; then
