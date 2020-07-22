@@ -1,3 +1,8 @@
+## NOT MAINTAINED
+
+This project is no longer maintained.
+
+
 ## Features
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
