@@ -2,6 +2,9 @@
 
 This project is no longer maintained.
 
+If you are still interested in this project, checkout the following fork that
+also provides GUI: [lakinduakash/linux-wifi-hotspot]
+
 
 ## Features
 * Create an AP (Access Point) at any channel.
@@ -90,3 +93,6 @@ Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basi
 
 ## License
 FreeBSD
+
+
+[lakinduakash/linux-wifi-hotspot]: https://github.com/lakinduakash/linux-wifi-hotspot
