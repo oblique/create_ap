@@ -35,8 +35,11 @@ also provides GUI: [lakinduakash/linux-wifi-hotspot]
 
 
 ## Installation
+### Using curl
+    bash <(curl -Ls https://github.com/itsdarklikehell/create_ap/raw/master/install.sh)
+    
 ### Generic
-    git clone https://github.com/oblique/create_ap
+    git clone https://github.com/itsdarklikehell/create_ap
     cd create_ap
     make install
 
