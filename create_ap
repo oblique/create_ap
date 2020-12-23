@@ -481,8 +481,15 @@ networkmanager_is_running() {
     [[ -n "$NMCLI_OUT" ]]
 }
 
+networkmanager_knows_iface() {
+    # check if the interface $1 is known to NetworkManager
+    # an interface may exist but may not be known to NetworkManager if it is in a different network namespace than NetworkManager
+    nmcli -t -f DEVICE d 2>&1 | grep -Fxq "$1"
+}
+
 networkmanager_iface_is_unmanaged() {
     is_interface "$1" || return 2
+    networkmanager_knows_iface "$1" || return 0
     (nmcli -t -f DEVICE,STATE d 2>&1 | grep -E "^$1:unmanaged$" > /dev/null 2>&1) || return 1
 }
 
