@@ -2,11 +2,18 @@
 
 This project is no longer maintained.
 
-If you are still interested in this project, checkout the following fork that
-also provides GUI: [lakinduakash/linux-wifi-hotspot]
+
+## Forks and continuation of this project
+
+* [linux-wifi-hotspot] - Fork that is focused on providing GUI and improvements.
+* [linux-router] - Fork that is focused on providing new features and
+    improvements which are not limited to WiFi. Some interesting features are:
+    sharing Internet to a wired interface and sharing Internet via a transparent
+    proxy using redsocks.
 
 
 ## Features
+
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
 * Hide your SSID.
@@ -19,7 +26,9 @@ also provides GUI: [lakinduakash/linux-wifi-hotspot]
 
 
 ## Dependencies
+
 ### General
+
 * bash (to run this script)
 * util-linux (for getopt)
 * procps or procps-ng
@@ -30,11 +39,13 @@ also provides GUI: [lakinduakash/linux-wifi-hotspot]
 * haveged (optional)
 
 ### For 'NATed' or 'None' Internet sharing method
+
 * dnsmasq
 * iptables
 
 
 ## Installation
+
 ### Generic
     git clone https://github.com/oblique/create_ap
     cd create_ap
@@ -95,4 +106,5 @@ Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basi
 FreeBSD
 
 
-[lakinduakash/linux-wifi-hotspot]: https://github.com/lakinduakash/linux-wifi-hotspot
+[linux-wifi-hotspot]: https://github.com/lakinduakash/linux-wifi-hotspot
+[linux-router]: https://github.com/garywill/linux-router
