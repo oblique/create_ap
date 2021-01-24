@@ -53,7 +53,7 @@ usage() {
     echo "  --vht_capab <VHT>       VHT capabilities"
     echo "  --beacon-interval <ms>  Set beacon interval in milliseconds (default 100)"
     echo "  --dtim-period <num>     Set DTIM period in numbers of beacons (default 2)"
-    echo "  --country <code>        Set two-letter country code for regularity (example: US)"
+    echo "  --country <code>        Set two-letter country code for 802.11d regulatory domain (example: US)"
     echo "  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
     echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt               Do not create virtual interface"
