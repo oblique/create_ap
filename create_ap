@@ -76,8 +76,8 @@ usage() {
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
     echo "Non-Bridging Options:"
-    echo "  --no-dns                Disable dnsmasq DNS server"
-    echo "  --no-dnsmasq            Disable dnsmasq server completely"
+    echo "  --no-dns                Disable dnsmasq DNS server (prevents clients from using Access Point for DNS)"
+    echo "  --no-dnsmasq            Disable dnsmasq server completely (implies --no-dns and disables DHCP as well)"
     echo "  -g <gateway>            IPv4 Gateway for the Access Point (default: 192.168.12.1)"
     echo "  -d                      DNS server will take into account /etc/hosts"
     echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
