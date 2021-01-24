@@ -1678,6 +1678,8 @@ fi
 
 if [[ $IEEE80211AC -eq 1 ]]; then
     echo "ieee80211ac=1" >> $CONFDIR/hostapd.conf
+    echo "vht_oper_centr_freq_seg0_idx=$(($CHANNEL + 6))" >> $CONFDIR/hostapd.conf
+    echo "vht_oper_chwidth=1" >> $CONFDIR/hostapd.conf
 fi
 
 if [[ -n "$VHT_CAPAB" ]]; then
