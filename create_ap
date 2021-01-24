@@ -1281,6 +1281,7 @@ trap "cleanup_lock" EXIT
 
 if ! init_lock; then
     echo "ERROR: Failed to initialize lock" >&2
+    echo "Try to remove /tmp/create_ap.all.lock" >&2
     exit 1
 fi
 
