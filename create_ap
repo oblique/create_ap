@@ -32,7 +32,7 @@ usage() {
     echo "Options:"
     echo "  -h, --help              Show this help"
     echo "  --version               Print version number"
-    echo "  -c <channel>            Channel number (default: 1)"
+    echo "  -c <channel>            Channel number (default: 1 or 36; use 0 or acs_survey for Automatic Channel Selection)"
     echo "  -w <WPA version>        Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
     echo "  -n                      Disable Internet sharing (if you use this, don't pass"
     echo "                          the <interface-with-internet> argument)"
@@ -318,7 +318,9 @@ can_transmit_to_channel() {
     IFACE=$1
     CHANNEL_NUM=$2
 
-    if [[ $USE_IWCONFIG -eq 0 ]]; then
+    if [[ CHANNEL_NUM -eq 0 ]]; then
+        return 0
+    elif [[ $USE_IWCONFIG -eq 0 ]]; then
         if [[ $FREQ_BAND == 2.4 ]]; then
             CHANNEL_INFO=$(get_adapter_info ${IFACE} | grep " 24[0-9][0-9] MHz \[${CHANNEL_NUM}\]")
         else
@@ -1344,6 +1346,8 @@ if [[ $CHANNEL == default ]]; then
     else
         CHANNEL=36
     fi
+elif [[ $CHANNEL == acs_survey ]]; then
+    CHANNEL=0
 fi
 
 if [[ $FREQ_BAND != 5 && $CHANNEL -gt 14 ]]; then
