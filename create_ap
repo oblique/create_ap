@@ -1035,6 +1035,11 @@ read_config() {
             echo "WARN: Unrecognized configuration entry $opt_name" >&2
         fi
     done < "$LOAD_CONFIG"
+    # Add condition after loading config to avoid $# count $INTERNET_IFACE.
+    if [[ "$SHARE_METHOD" == "none" && -n "$INTERNET_IFACE" ]] ; then
+            echo "WARN: SHARE_METHOD is \"$SHARE_METHOD\" and INTERNET_IFACE is \"$INTERNET_IFACE\". unset INTERNET_IFACE" >&2
+            unset INTERNET_IFACE
+    fi
 }
 
 
