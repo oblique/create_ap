@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+# After resume, restart create_ap service (if it was already running)
+# See:
+#   https://www.freedesktop.org/software/systemd/man/systemd-suspend.service.html
+
+case "$1" in
+    pre) ;;
+    post) /bin/systemctl try-restart create_ap.service ;;
+esac
