@@ -93,6 +93,14 @@ This project is no longer maintained.
 ### Client Isolation:
     create_ap --isolate-clients wlan0 eth0 MyAccessPoint MyPassPhrase
 
+### WPS
+    create_ap wlan0 eth0 MyAccessPoint MyPassPhrase --wps
+
+For Push Button Configuration (PBC), use `hostapd_cli` to press the virtual WPS button
+(see create_ap's output for exact command):
+
+    hostapd_cli -p/path/to/hostapd_ctrl wps_pbc
+
 ## Systemd service
 Using the persistent [systemd](https://wiki.archlinux.org/index.php/systemd#Basic_systemctl_usage) service
 ### Start service immediately:
