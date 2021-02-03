@@ -1519,6 +1519,12 @@ if [[ $NO_VIRT -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
     exit 1
 fi
 
+if [[ $NM_OLDER_VERSION -eq 1 && "$WIFI_IFACE" == "$INTERNET_IFACE" ]]; then
+    echo -n "ERROR: You can not share your connection from the same" >&2
+    echo " interface if your NetworkManager version is < 0.9.9" >&2
+    exit 1
+fi
+
 mutex_lock
 trap "cleanup" EXIT
 CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
