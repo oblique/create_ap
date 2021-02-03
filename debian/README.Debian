@@ -1,0 +1,34 @@
+createap for Debian
+------------------
+Any affort to make this program better is appreciated :)
+
+I do this project just because I have studided Debian package system for some time, as well as I was troubled a lot by STUPID network-manager on my UKylin1604 os. And I have being using this create_ap script for a few days, and I like it very much for its stability. 
+
+Some tips that may do help to you are listed here:
+
+	You can configure this program by editing the create_ap.conf file before building this package, or just after it`s installed and to edit the /etc/create_ap.conf. (I recommend that you need just change the fllowing options according to the actual situation:
+		WIFI_IFACE=wlan0
+		INTERNET_IFACE=eth0
+		SSID=MyAccessPoint
+		PASSPHRASE=12345678
+	 )
+	
+	To build this debian package, run following comand in createap-xxx/:
+		debuild //you need to install devscripts first.
+	or:
+		dpkg-buildpackage -b
+	
+	Install 
+		apt-get install procps hostapd iproute2 iw dnsmasq
+		dpkg -i createap-xxx.deb
+	
+	Remove 
+		apt remove createap
+	
+	To remove this package entirely:
+		apt remove createap --purge
+	
+...
+
+
+ -- caozuohua <caozuohua@qq.com>  Fri, 29 Dec 2017 09:57:54 +0800
