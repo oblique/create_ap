@@ -61,7 +61,7 @@ usage() {
     echo "  --fix-unmanaged         If NetworkManager shows your interface as unmanaged after you"
     echo "                          close create_ap, then use this option to switch your interface"
     echo "                          back to managed"
-    echo "  --mac <MAC>             Set MAC address"
+    echo "  --mac <MAC>             Set MAC address of WiFi interface"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP (default is gateway; see also --no-dns below)"
     echo "                          Multiple servers may be specified (example: 'gateway,8.8.8.8')"
     echo "  --dhcp-dns6 <IP1[,IP2]> Set DNSv6 returned by DHCP (default is gateway; see also --no-dns below)"
@@ -85,8 +85,8 @@ usage() {
     echo "  --no-dnsmasq            Disable dnsmasq completely (implies --no-dns and also disables DHCP)"
     echo "  -g <gateway>            IPv4 Gateway address for the Access Point (default: 192.168.12.1)"
     echo "  --ipv6                  Enable IPv6 support"
-    echo "  -d                      DNS server will take into account /etc/hosts"
-    echo "  -e <hosts_file>         DNS server will take into account additional hosts file"
+    echo "  -d                      DNS server will include /etc/hosts in its results"
+    echo "  -e <hosts_file>         DNS server will include additional hosts file in its results"
     echo
     echo "Useful informations:"
     echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
@@ -693,7 +693,7 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS DHCP_DNS6 NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6)
+             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6 ADDN_HOSTS)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
