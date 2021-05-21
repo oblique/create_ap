@@ -63,7 +63,9 @@ usage() {
     echo "                          back to managed"
     echo "  --mac <MAC>             Set MAC address"
     echo "  --dhcp-dns <IP1[,IP2]>  Set DNS returned by DHCP (default is gateway; see also --no-dns below)"
+    echo "                          Multiple servers may be specified (example: 'gateway,8.8.8.8')"
     echo "  --dhcp-dns6 <IP1[,IP2]> Set DNSv6 returned by DHCP (default is gateway; see also --no-dns below)"
+    echo "                          Multiple servers may be specified (example: 'gateway,2001:4860:4860::8888')"
     echo "  --daemon                Run create_ap in the background"
     echo "  --pidfile <pidfile>     Save daemon PID to file"
     echo "  --logfile <logfile>     Save daemon messages to file"
@@ -1808,12 +1810,8 @@ elif [[ $NO_DNSMASQ -eq 0 ]]; then
     else
         DNSMASQ_BIND=bind-dynamic
     fi
-    if [[ "$DHCP_DNS" == "gateway" ]]; then
-        DHCP_DNS="$GATEWAY"
-    fi
-    if [[ "$DHCP_DNS6" == "gateway" ]]; then
-        DHCP_DNS6="[$GATEWAY6]"
-    fi
+    DHCP_DNS="${DHCP_DNS/gateway/$GATEWAY}"
+    DHCP_DNS6="${DHCP_DNS6/gateway/[$GATEWAY6]}"
     cat << EOF > $CONFDIR/dnsmasq.conf
 interface=${WIFI_IFACE}
 ${DNSMASQ_BIND}
