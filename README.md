@@ -5,6 +5,7 @@ This project is a fork of the no-longer-maintained [oblique/create_ap](//github.
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
 * Hide your SSID.
+* Enable [Wi-Fi Protected Setup](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Setup) (WPS) with push-button or PIN methods.
 * Disable communication between clients (client isolation).
 * IEEE 802.11n & 802.11ac support
 * Internet sharing methods: NATed or Bridged or None (no Internet sharing).
@@ -49,6 +50,11 @@ This project is a fork of the no-longer-maintained [oblique/create_ap](//github.
 
 ### WPA + WPA2 passphrase:
     create_ap wlan0 eth0 MyAccessPoint MyPassPhrase
+
+### WPS Push Button or PIN entry:
+    create_ap wlan0 eth0 MyAccessPoint MyPassPhrase
+    create_ap --wps-pbc wlan0            # Device will have 2 minutes to connect
+    create_ap --wps-pin wlan0,12345678   # Enroll PIN 12345678 for device requesting it
 
 ### AP without Internet sharing:
     create_ap -n wlan0 MyAccessPoint MyPassPhrase

@@ -40,6 +40,7 @@ usage() {
     echo "                          Use: 'nat' for NAT (default)"
     echo "                               'bridge' for bridging"
     echo "                               'none' for no Internet sharing (equivalent to -n)"
+    echo "  --wps                   Enable WPS (Wireless Protected Setup) with push button (PBC) and PIN modes"
     echo "  --psk                   Use 64 hex digits pre-shared-key instead of passphrase"
     echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
     echo "  --mac-filter            Enable MAC address filtering"
@@ -77,6 +78,8 @@ usage() {
     echo "                          For an <id> you can put the PID of create_ap or the WiFi interface."
     echo "                          If virtual WiFi interface was created, then use that one."
     echo "                          You can get them with --list-running"
+    echo "  --wps-pbc <id>          Simulate WPS push button (PBC)"
+    echo "  --wps-pin <id>,<pin>    Enroll PIN for WPS"
     echo "  --mkconfig <conf_file>  Store configs in conf_file"
     echo "  --config <conf_file>    Load configs from conf_file"
     echo
@@ -686,6 +689,7 @@ DAEMON_LOGFILE=/dev/null
 NO_HAVEGED=0
 USE_PSK=0
 IPV6=0
+WPS=0
 
 HOSTAPD_DEBUG_ARGS=
 REDIRECT_TO_LOCALHOST=0
@@ -693,7 +697,7 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS DHCP_DNS6 NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6 ADDN_HOSTS)
+             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6 ADDN_HOSTS WPS)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -1006,6 +1010,40 @@ list_clients() {
     fi
 }
 
+wps_trigger() {
+    local wifi_iface pid
+
+    # If PID is given, get the associated wifi iface
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
+        pid="$1"
+        wifi_iface=$(get_wifi_iface_from_pid "$pid")
+        [[ -z "$wifi_iface" ]] && die "'$pid' is not the pid of a running $PROGNAME instance."
+    fi
+
+    [[ -z "$wifi_iface" ]] && wifi_iface="$1"
+    is_wifi_interface "$wifi_iface" || die "'$wifi_iface' is not a WiFi interface."
+
+    [[ -z "$pid" ]] && pid=$(get_pid_from_wifi_iface "$wifi_iface")
+    [[ -z "$pid" ]] && die "'$wifi_iface' is not used from $PROGNAME instance.\n\
+       Maybe you need to pass the virtual interface instead.\n\
+       Use --list-running to find it out."
+    [[ -z "$CONFDIR" ]] && CONFDIR=$(get_confdir_from_pid "$pid")
+
+    HOSTAPD_CLI=$(which hostapd_cli)
+    if ! $HOSTAPD_CLI -p $CONFDIR/hostapd_ctrl get_config | grep -q wps_state=configured; then
+        die "WPS is not configured. You need to run $PROGNAME with --wps, or add WPS=1 to config file."
+    fi
+
+    if [[ "$2" = "PBC" ]]; then
+        echo "Triggering WPS pushbutton; your device will have 120 seconds to connect..."
+        $HOSTAPD_CLI -p $CONFDIR/hostapd_ctrl wps_pbc
+    else
+        echo "Enrolling WPS PIN '$2'..."
+        $HOSTAPD_CLI -p $CONFDIR/hostapd_ctrl wps_pin any "$2"
+    fi
+    $HOSTAPD_CLI -p $CONFDIR/hostapd_ctrl wps_get_status
+}
+
 has_running_instance() {
     local PID x
 
@@ -1120,7 +1158,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","ipv6","mkconfig:","config:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","ipv6","mkconfig:","config:","wps","wps-pbc:","wps-pin:" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1278,9 +1316,25 @@ while :; do
             LIST_CLIENTS_ID="$1"
             shift
             ;;
+        --wps-pbc)
+            shift
+            WPS_TRIGGER_ID="$1"
+            WPS_TRIGGER_PIN="PBC"
+            shift;
+            ;;
+        --wps-pin)
+            shift
+            WPS_TRIGGER_ID="${1/,*/}"
+            WPS_TRIGGER_PIN="${1/*,/}"
+            shift;
+            ;;
         --no-haveged)
             shift
             NO_HAVEGED=1
+            ;;
+        --wps)
+            shift
+            WPS=1
             ;;
         --psk)
             shift
@@ -1342,7 +1396,7 @@ fi
 
 # Check if required number of positional args are present
 if [[ $# -lt 1 && $FIX_UNMANAGED -eq 0  && -z "$STOP_ID" &&
-      $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" ]]; then
+      $LIST_RUNNING -eq 0 && -z "$LIST_CLIENTS_ID" && -z "$WPS_TRIGGER_ID" ]]; then
     usage >&2
     exit 1
 fi
@@ -1381,6 +1435,11 @@ fi
 if [[ $(id -u) -ne 0 ]]; then
     echo "You must run it as root." >&2
     exit 1
+fi
+
+if [[ -n "$WPS_TRIGGER_ID" ]]; then
+    wps_trigger "$WPS_TRIGGER_ID" "$WPS_TRIGGER_PIN"
+    exit 0
 fi
 
 if [[ -n "$STOP_ID" ]]; then
@@ -1743,6 +1802,24 @@ ap_isolate=$ISOLATE_CLIENTS
 beacon_int=${BEACON_INTERVAL}
 dtim_period=${DTIM_PERIOD}
 EOF
+
+if [[ $WPS -eq 1 ]]; then
+    echo "Enabling WPS push button (PBC) and PIN modes!"
+    # WPS configuration: AP configured, do not allow external WPS Registrars,
+    #   device type is "Network Infrastructure / AP"
+    cat << EOF >> $CONFDIR/hostapd.conf
+wps_state=2
+ap_setup_locked=1
+device_type=6-0050F204-1
+config_methods=push_button label
+EOF
+    # Show SSID as device_name unless hidden
+    # (other potential descriptive options are manufacturer, model_name,
+    # model_number, serial_number, os_version)
+    if [[ $HIDDEN -ne 1 ]]; then
+        echo "device_name=${SSID}" >> $CONFDIR/hostapd.conf
+    fi
+fi
 
 if [[ -n "$COUNTRY" ]]; then
     cat << EOF >> $CONFDIR/hostapd.conf
