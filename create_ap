@@ -1808,10 +1808,11 @@ if [[ $WPS -eq 1 ]]; then
     # WPS configuration: AP configured, do not allow external WPS Registrars,
     #   device type is "Network Infrastructure / AP"
     cat << EOF >> $CONFDIR/hostapd.conf
+eap_server=1
 wps_state=2
 ap_setup_locked=1
 device_type=6-0050F204-1
-config_methods=push_button label
+config_methods=push_button virtual_push_button label
 EOF
     # Show SSID as device_name unless hidden
     # (other potential descriptive options are manufacturer, model_name,
