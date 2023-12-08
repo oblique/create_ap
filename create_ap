@@ -40,6 +40,7 @@ usage() {
     echo "                          Use: 'nat' for NAT (default)"
     echo "                               'bridge' for bridging"
     echo "                               'none' for no Internet sharing (equivalent to -n)"
+    echo "  --metered               Indicate to clients that WiFi is metered and/or should be used sparingly."
     echo "  --wps                   Enable WPS (Wireless Protected Setup) with push button (PBC) and PIN modes"
     echo "  --psk                   Use 64 hex digits pre-shared-key instead of passphrase"
     echo "  --hidden                Make the Access Point hidden (do not broadcast the SSID)"
@@ -672,6 +673,7 @@ MAC_FILTER=0
 MAC_FILTER_ACCEPT=/etc/hostapd/hostapd.accept
 ISOLATE_CLIENTS=0
 SHARE_METHOD=nat
+METERED=0
 IEEE80211N=0
 IEEE80211AC=0
 HT_CAPAB='[HT40+]'
@@ -697,7 +699,7 @@ REDIRECT_TO_LOCALHOST=0
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS DHCP_DNS6 NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
              NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
-             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6 ADDN_HOSTS WPS)
+             SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6 ADDN_HOSTS WPS METERED)
 
 FIX_UNMANAGED=0
 LIST_RUNNING=0
@@ -1158,7 +1160,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","ipv6","mkconfig:","config:","wps","wps-pbc:","wps-pin:" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","ipv6","mkconfig:","config:","wps","wps-pbc:","wps-pin:","metered" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1226,6 +1228,10 @@ while :; do
             shift
             SHARE_METHOD="$1"
             shift
+            ;;
+        --metered)
+            shift
+            METERED=1
             ;;
         --ieee80211n)
             shift
@@ -1801,7 +1807,23 @@ ignore_broadcast_ssid=$HIDDEN
 ap_isolate=$ISOLATE_CLIENTS
 beacon_int=${BEACON_INTERVAL}
 dtim_period=${DTIM_PERIOD}
+#device_name=Fnord
+#manufacturer=Vark
 EOF
+
+if [[ $METERED -ne 0 ]]; then
+    # Add Microsoft's "network cost information element"
+    # (https://learn.microsoft.com/fi-fi/windows-hardware/drivers/mobilebroadband/network-cost-information-element)
+    # and Apple's vendor element that indicates a personal hotspot
+    # (https://apple.stackexchange.com/questions/199163/how-does-ios-and-os-x-detect-when-a-wi-fi-network-is-a-personal-hotspot)
+    # The Microsoft element seems to be quasi-standardized now.
+
+    # We intentionally set the last byte (which is reserved and
+    # supposed to always be 00) to 02 in order to work around a bug caused by
+    # previously-incorrect documentation by Microsoft. See:
+    # https://openwrt.org/docs/guide-user/network/wifi/ms-meteredconnection#under_the_hood
+    echo "vendor_elements=dd080050f21102000002dd0a0017f206010103010000" >> $CONFDIR/hostapd.conf
+fi
 
 if [[ $WPS -eq 1 ]]; then
     echo "Enabling WPS push button (PBC) and PIN modes!"
@@ -1897,6 +1919,14 @@ dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
 dhcp-option-force=option:router,${GATEWAY}
 dhcp-option-force=option:dns-server,${DHCP_DNS}
 EOF
+
+    # Android devices apparently detect metered networks using
+    # this DHCP vendor option, according to
+    # https://www.lorier.net/docs/android-metered.html
+    if [[ $METERED -ne 0 ]]; then
+        echo "dhcp-option-force=43,ANDROID_METERED" >> $CONFDIR/dnsmasq.conf
+    fi
+
     if [[ $IPV6 -ne 0 ]]; then
         if [[ "$NO_DNS" -ne 0 ]]; then
             RA_MODE="ra-names"
