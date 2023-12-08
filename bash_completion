@@ -115,9 +115,6 @@ _create_ap() {
         --no-virt)
             # No Options
             ;;
-        --no-haveged)
-            # No Options
-            ;;
         --fix-unmanaged)
             # No Options
             ;;

@@ -20,10 +20,11 @@ This project is a fork of the no-longer-maintained [oblique/create_ap](//github.
 * util-linux (for getopt)
 * procps or procps-ng
 * hostapd
+  * Version 2.6 or newer is required; earlier versions may
+    fail unpredictably due to [a RNG bug](https://packetstormsecurity.com/files/156573/Hostapd-Insufficient-Entropy.html).
 * iproute2
 * iw
 * iwconfig (you only need this if 'iw' can not recognize your adapter)
-* haveged (optional)
 
 ### For 'NATed' or 'None' Internet sharing method
 * dnsmasq

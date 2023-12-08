@@ -8,7 +8,6 @@
 #    iproute2
 #    iw
 #    iwconfig (you only need this if 'iw' can not recognize your adapter)
-#    haveged (optional)
 
 # dependencies for 'nat' or 'none' Internet sharing method
 #    dnsmasq
@@ -59,7 +58,6 @@ usage() {
     echo "  --freq-band <GHz>       Set frequency band. Valid inputs: 2.4, 5 (default: 2.4)"
     echo "  --driver                Choose your WiFi adapter driver (default: nl80211)"
     echo "  --no-virt               Do not create virtual interface"
-    echo "  --no-haveged            Do not run 'haveged' automatically when needed"
     echo "  --fix-unmanaged         If NetworkManager shows your interface as unmanaged after you"
     echo "                          close create_ap, then use this option to switch your interface"
     echo "                          back to managed"
@@ -462,28 +460,6 @@ get_new_ipv6addr() {
     echo $NEWIP
 }
 
-# start haveged when needed
-haveged_watchdog() {
-    local show_warn=1
-    while :; do
-        mutex_lock
-        if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
-            if ! which haveged > /dev/null 2>&1; then
-                if [[ $show_warn -eq 1 ]]; then
-                    echo "WARN: Low entropy detected. We recommend you to install \`haveged'"
-                    show_warn=0
-                fi
-            elif ! pidof haveged > /dev/null 2>&1; then
-                echo "Low entropy detected, starting haveged"
-                # boost low-entropy
-                haveged -w 1024 -p $COMMON_CONFDIR/haveged.pid
-            fi
-        fi
-        mutex_unlock
-        sleep 2
-    done
-}
-
 NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
 NM_OLDER_VERSION=1
 
@@ -688,7 +664,6 @@ NEW_MACADDR=
 DAEMONIZE=0
 DAEMON_PIDFILE=
 DAEMON_LOGFILE=/dev/null
-NO_HAVEGED=0
 USE_PSK=0
 IPV6=0
 WPS=0
@@ -698,7 +673,7 @@ REDIRECT_TO_LOCALHOST=0
 
 CONFIG_OPTS=(CHANNEL GATEWAY WPA_VERSION ETC_HOSTS DHCP_DNS DHCP_DNS6 NO_DNS NO_DNSMASQ HIDDEN MAC_FILTER MAC_FILTER_ACCEPT ISOLATE_CLIENTS
              SHARE_METHOD IEEE80211N IEEE80211AC HT_CAPAB VHT_CAPAB DRIVER NO_VIRT COUNTRY FREQ_BAND
-             NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE NO_HAVEGED WIFI_IFACE INTERNET_IFACE
+             NEW_MACADDR DAEMONIZE DAEMON_PIDFILE DAEMON_LOGFILE WIFI_IFACE INTERNET_IFACE
              SSID PASSPHRASE USE_PSK BEACON_INTERVAL DTIM_PERIOD IPV6 ADDN_HOSTS WPS METERED)
 
 FIX_UNMANAGED=0
@@ -718,17 +693,12 @@ OLD_MACADDR=
 IP_ADDRS=
 ROUTE_ADDRS=
 
-HAVEGED_WATCHDOG_PID=
-
 _cleanup() {
     local PID x
 
     trap "" SIGINT SIGUSR1 SIGUSR2 EXIT
     mutex_lock
     disown -a
-
-    # kill haveged_watchdog
-    [[ -n "$HAVEGED_WATCHDOG_PID" ]] && kill $HAVEGED_WATCHDOG_PID
 
     # kill processes
     for x in $CONFDIR/*.pid; do
@@ -1160,7 +1130,7 @@ for ((i=0; i<$#; i++)); do
     fi
 done
 
-GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-haveged","no-dns","no-dnsmasq","ipv6","mkconfig:","config:","wps","wps-pbc:","wps-pin:","metered" -n "$PROGNAME" -- "$@")
+GETOPT_ARGS=$(getopt -o hc:w:g:de:nm: -l "help","hidden","hostapd-debug:","redirect-to-localhost","mac-filter","mac-filter-accept:","isolate-clients","ieee80211n","ieee80211ac","ht_capab:","vht_capab:","driver:","no-virt","fix-unmanaged","country:","freq-band:","mac:","dhcp-dns:","dhcp-dns6:","daemon","pidfile:","logfile:","stop:","list","list-running","list-clients:","version","psk","no-dns","no-dnsmasq","ipv6","mkconfig:","config:","wps","wps-pbc:","wps-pin:","metered" -n "$PROGNAME" -- "$@")
 [[ $? -ne 0 ]] && exit 1
 eval set -- "$GETOPT_ARGS"
 
@@ -1333,10 +1303,6 @@ while :; do
             WPS_TRIGGER_ID="${1/,*/}"
             WPS_TRIGGER_PIN="${1/*,/}"
             shift;
-            ;;
-        --no-haveged)
-            shift
-            NO_HAVEGED=1
             ;;
         --wps)
             shift
@@ -2113,11 +2079,6 @@ fi
 
 # start access point
 echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
-
-if [[ $NO_HAVEGED -eq 0 ]]; then
-    haveged_watchdog &
-    HAVEGED_WATCHDOG_PID=$!
-fi
 
 # start hostapd (use stdbuf when available for no delayed output in programs that redirect stdout)
 STDBUF_PATH=`which stdbuf`
