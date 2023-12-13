@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+######################################################################
+# WARNING: # For unclear reasons (distribution-specific bug?
+# systemd bug?), this script might work
+#    ONLY if it is named     /lib/systemd/system-sleep
+# and NOT if it is named /usr/lib/systemd/system-sleep
+#
+# If you encounter this issue, please report at
+# https://github.com/dlenski/create_ap/issues/1
+######################################################################
+
 # After resume, restart create_ap service (if it was already running)
 # See:
 #   https://www.freedesktop.org/software/systemd/man/systemd-suspend.service.html
